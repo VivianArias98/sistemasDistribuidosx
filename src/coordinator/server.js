@@ -13,8 +13,17 @@ const ALGO = process.env.ALGO || "bully";
 app.listen(config.port, async () => {
     console.log("═".repeat(60));
     console.log(`🚀 COORDINADOR DISTRIBUIDO INICIADO`);
-    console.log(`🆔 ID del Nodo  : ${config.nodeId}`);
     console.log(`📍 Puerto       : ${config.port}`);
+
+    if (!config.isConfigured) {
+        console.log(`⚠️  Nodo SIN CONFIGURAR — abre http://localhost:${config.port} para configurarlo`);
+        console.log("═".repeat(60));
+        // El engine se inicializa cuando el usuario complete el wizard
+        cleanup.start();
+        return;
+    }
+
+    console.log(`🆔 ID del Nodo  : ${config.nodeId}`);
     console.log(`🌐 URL Base     : ${config.baseUrl}`);
     console.log(`⚙️  Algoritmo   : ${ALGO}`);
     console.log(`⏱️  Preset      : ${config.timingPreset} (heartbeat: ${config.timing.heartbeat}ms)`);
@@ -23,10 +32,7 @@ app.listen(config.port, async () => {
     console.log(`🗳️  Elección    : http://localhost:${config.port}/election.html`);
     console.log("═".repeat(60));
 
-    // Iniciar detector de timeout de workers
     cleanup.start();
-
-    // Iniciar engine de elección
     await init(ALGO);
 
     logger.info(config.nodeId, `Coordinador listo — Algoritmo: ${ALGO}, Peers: ${config.peerUrls.length}`);

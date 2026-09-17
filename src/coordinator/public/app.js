@@ -118,32 +118,19 @@ async function loadNodeState() {
         const data = await r.json();
 
         // Header info
-        $(\"hdr-node-id\").textContent = `Nodo ${data.id}`;
-        const roleLabels = { leader: \"👑 Líder\", follower: \"📡 Seguidor\", candidate: \"🗳️ Candidato\" };
-        $(\"hdr-role\").textContent = roleLabels[data.role] || data.role;
-        $(\"hdr-term\").textContent = `Término: ${data.term}`;
+        $("hdr-node-id").textContent = `Nodo ${data.id}`;
+        const roleLabels = { leader: "👑 Líder", follower: "📡 Seguidor", candidate: "🗳️ Candidato" };
+        $("hdr-role").textContent = roleLabels[data.role] || data.role;
+        $("hdr-term").textContent = `Término: ${data.term}`;
 
         // Banner del líder actual
-        const banner = $(\"leader-banner\");
+        const banner = $("leader-banner");
         if (data.leaderId) {
-            banner.style.display = \"flex\";
-            $(\"leader-banner-id\").textContent = data.leaderId;
-            $(\"leader-banner-url\").textContent = data.leaderUrl || \"\";
-
-            // Si YO soy el líder, resaltar el botón
-            const killBtn = $(\"btn-kill-leader\");
-            const killBannerBtn = $(\"btn-kill-leader-banner\");
-            if (data.role === \"leader\") {
-                killBtn.textContent = \"💀 Matarme (soy el Líder)\";
-                killBtn.style.background = \"rgba(241,78,110,0.3)\";
-                killBannerBtn.textContent = \"💀 Tumbarme a mí mismo\";
-            } else {
-                killBtn.textContent = \"💀 Matar Líder\";
-                killBtn.style.background = \"\";
-                killBannerBtn.textContent = \"💀 Matar este Líder\";
-            }
+            banner.style.display = "flex";
+            $("leader-banner-id").textContent = data.leaderId;
+            $("leader-banner-url").textContent = data.leaderUrl || "";
         } else {
-            banner.style.display = \"none\";
+            banner.style.display = "none";
         }
 
     } catch {}
@@ -221,17 +208,21 @@ function updateMessageDropdown() {
 
 function renderPeers(peers, cluster) {
     const tbody = $("peers-tbody");
-    $("peers-count").textContent = `${peers.length} peer${peers.length !== 1 ? "s" : ""}`;
-    $("kpi-total-val").textContent = peers.length + 1;
-    $("kpi-active-val").textContent = (cluster?.alivePeers ?? peers.filter(p => p.alive).length) + 1;
-    $("kpi-fallen-val").textContent = peers.filter(p => !p.alive).length;
 
-    if (peers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">Sin peers conocidos (modo standalone)</td></tr>';
+    // Filtrar: solo mostrar peers con URLs externas (ngrok u otros), no localhost
+    const externalPeers = peers.filter(p => p.url && !p.url.includes("localhost") && !p.url.includes("127.0.0.1"));
+
+    $("peers-count").textContent = `${externalPeers.length} peer${externalPeers.length !== 1 ? "s" : ""}`;
+    $("kpi-total-val").textContent = externalPeers.length + 1;
+    $("kpi-active-val").textContent = externalPeers.filter(p => p.alive).length + 1;
+    $("kpi-fallen-val").textContent = externalPeers.filter(p => !p.alive).length;
+
+    if (externalPeers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">Sin peers externos conocidos aún...</td></tr>';
         return;
     }
 
-    tbody.innerHTML = peers.map(p => {
+    tbody.innerHTML = externalPeers.map(p => {
         const snap = p.snapshot || {};
         const role = snap.role || "?";
         const roleClass = role === "leader" ? "badge-role-leader" : role === "candidate" ? "badge-role-candidate" : "badge-role-follower";
@@ -333,42 +324,14 @@ async function simulateFall(name) {
     }
 }
 
-// ─── Matar al Líder actual ─────────────────────────────────
+// ─── Matar al Líder (dimisión local) ──────────────────────
 async function killLeader() {
     const btn = $("btn-kill-leader");
     btn.disabled = true;
-    btn.textContent = "Matando...";
-
+    btn.textContent = "Disparando...";
     try {
-        // 1. Intentar obtener la URL del líder actual
-        const stateResp = await fetch("/election/state");
-        const state = await stateResp.json();
-
-        if (!state.leaderId) {
-            showToast("⚠️ No hay líder elegido aún", "info");
-            return;
-        }
-
-        // 2. Si YO soy el líder → me dimito
-        if (state.role === "leader") {
-            await fetch("/election/trigger", { method: "POST" });
-            showToast(`👑 Dimisión forzada — nueva elección iniciada`, "success");
-        } else {
-            // 3. Si otro nodo es el líder → enviarle el trigger remotamente
-            const leaderUrl = state.leaderUrl;
-            if (!leaderUrl) {
-                showToast("❌ URL del líder desconocida", "error");
-                return;
-            }
-            // Llamar al endpoint del líder a través de nuestra API proxy
-            const r = await fetch("/election/kill-leader", { method: "POST" });
-            const data = await r.json();
-            if (r.ok) {
-                showToast(`💀 Líder ${state.leaderId} tumbado — nueva elección en curso`, "success");
-            } else {
-                showToast(`❌ ${data.error || "No se pudo tumbar al líder"}`, "error");
-            }
-        }
+        await fetch("/election/trigger", { method: "POST" });
+        showToast("💀 Elección forzada — este nodo abdica", "success");
         await loadNodeState();
     } catch (err) {
         showToast(`❌ ${err.message}`, "error");

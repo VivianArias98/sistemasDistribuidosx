@@ -1,35 +1,46 @@
 /**
  * config.js — Configuración central del Coordinador
- * Lee variables de entorno y expone un objeto de configuración inmutable.
+ * Lee variables de entorno y expone un objeto de configuración.
+ * Soporta reconfiguración en caliente vía configure().
  */
 require("dotenv").config();
 
 const { getTiming } = require("./election/timing");
 
-const NODE_ID  = process.env.NODE_ID  || "A";
-const PORT     = parseInt(process.env.PORT || "3001", 10);
-const BASE_URL = process.env.BASE_URL  || `http://localhost:${PORT}`;
+let NODE_ID  = process.env.NODE_ID  || null;  // null = sin configurar aún
+let PORT     = parseInt(process.env.PORT || "3001", 10);
+let BASE_URL = process.env.BASE_URL  || `http://localhost:${PORT}`;
 
 // Peers iniciales: lista de URLs separadas por coma
-const PEER_URLS = (process.env.PEERS || "")
+let PEER_URLS = (process.env.PEERS || "")
     .split(",")
     .map(u => u.trim())
     .filter(Boolean);
 
-const TIMING_PRESET = process.env.TIMING_PRESET || "lan";
-const timing = getTiming(TIMING_PRESET);
+let TIMING_PRESET = process.env.TIMING_PRESET || "wan";
+let timing = getTiming(TIMING_PRESET);
 
 // Timeout para detectar workers inactivos (Naming Service)
 const WORKER_TIMEOUT_MS = parseInt(process.env.WORKER_TIMEOUT_MS || "15000", 10);
 
-const config = Object.freeze({
-    nodeId: NODE_ID,
-    port: PORT,
-    baseUrl: BASE_URL,
-    peerUrls: PEER_URLS,
-    timingPreset: TIMING_PRESET,
-    timing,
-    workerTimeoutMs: WORKER_TIMEOUT_MS,
-});
+const config = {
+    get nodeId()       { return NODE_ID || "UNCONFIGURED"; },
+    get port()         { return PORT; },
+    get baseUrl()      { return BASE_URL; },
+    get peerUrls()     { return PEER_URLS; },
+    get timingPreset() { return TIMING_PRESET; },
+    get timing()       { return timing; },
+    get workerTimeoutMs() { return WORKER_TIMEOUT_MS; },
+    get isConfigured() { return !!NODE_ID; },
+
+    /**
+     * Reconfigura el nodo en caliente (desde el wizard de setup).
+     */
+    configure({ nodeId, baseUrl, peerUrls }) {
+        if (nodeId)   NODE_ID   = nodeId;
+        if (baseUrl)  BASE_URL  = baseUrl;
+        if (peerUrls) PEER_URLS = peerUrls;
+    },
+};
 
 module.exports = config;
