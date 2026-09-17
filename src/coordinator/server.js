@@ -16,11 +16,19 @@ app.listen(config.port, async () => {
     console.log(`📍 Puerto       : ${config.port}`);
 
     if (!config.isConfigured) {
-        console.log(`⚠️  Nodo SIN CONFIGURAR — abre http://localhost:${config.port} para configurarlo`);
-        console.log("═".repeat(60));
-        // El engine se inicializa cuando el usuario complete el wizard
-        cleanup.start();
-        return;
+        console.log(`⚠️  Nodo SIN CONFIGURAR por variables de entorno — Auto-configurando...`);
+        let baseUrl = `http://localhost:${config.port}`;
+        try {
+            const axios = require("axios");
+            const resp = await axios.get("http://127.0.0.1:4040/api/tunnels", { timeout: 1500 });
+            const tunnel = resp.data.tunnels?.find(t => t.proto === "https");
+            if (tunnel && tunnel.public_url) baseUrl = tunnel.public_url;
+        } catch (e) {
+            // ngrok not running, ignore
+        }
+        
+        const randomId = Math.floor(Math.random() * 1000);
+        config.configure({ nodeId: `Coordinador-${randomId}`, baseUrl, peerUrls: [] });
     }
 
     console.log(`🆔 ID del Nodo  : ${config.nodeId}`);
