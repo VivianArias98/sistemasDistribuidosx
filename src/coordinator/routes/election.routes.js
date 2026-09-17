@@ -30,6 +30,7 @@ router.post("/election/message", async (req, res) => {
 // ─── POST /election/ping (Gossip heartbeat) ───────────────────────────────────
 router.post("/election/ping", (req, res) => {
     if (faults.paused) return res.status(503).json({ error: "Nodo pausado" });
+    if (engine.selfId === "UNCONFIGURED") return res.status(503).json({ error: "Nodo no configurado" });
 
     const { id, url, peers: remotePeers = [] } = req.body;
 
