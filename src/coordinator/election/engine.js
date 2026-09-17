@@ -86,7 +86,8 @@ const engine = {
             term,
             leaderId,
             leaderUrl,
-            peers:     engine.knownPeers().map(p => ({ id: p.id, url: p.url })),
+            // ¡Clave para eliminar fantasmas! Solo propagar peers que estén VIVOS.
+            peers:     engine.knownPeers().filter(p => p.alive).map(p => ({ id: p.id, url: p.url })),
             faults:    faults.snapshot(),
             uptime:    process.uptime(),
             ts:        Date.now(),
