@@ -17,17 +17,42 @@
 
 <body>
 
-    <!-- HEADER -->
-    <header class="header">
-        <div class="header-left">
-            <div class="logo">
-                <div class="logo-icon">⬡</div>
-                <div>
-                    <span class="logo-title">Vivian-Andrea</span>
-                    <span class="logo-sub" id="hdr-node-id">Coordinador —</span>
+    <!-- APP LAYOUT -->
+    <div class="app-layout">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                    <div style="font-size: 1.5rem; color: var(--purple); animation: spin 12s linear infinite;">⬡</div>
+                    <div>
+                        <span style="display:block; font-weight:700; font-size:1.1rem; color: var(--text-1);">Vivian-Andrea</span>
+                        <span style="display:block; font-size:0.72rem; color:var(--text-3); font-family: var(--font-mono);">Middleware Panel</span>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item active">
+                    <span style="font-size: 1.1rem;">📊</span> Panel Principal
+                </a>
+                <a href="/election.html" class="nav-item">
+                    <span style="font-size: 1.1rem;">🗳️</span> Clúster & Elección
+                </a>
+                <button class="nav-item" onclick="openConnectModal()">
+                    <span style="font-size: 1.1rem;">🔌</span> Conectar a Otro
+                </button>
+            </nav>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <div class="main-content">
+
+            <!-- HEADER -->
+            <header class="header">
+                <div class="header-left">
+                    <!-- Logo movido al sidebar -->
+                </div>
         <div class="header-center">
             <div class="sys-badge" id="sys-status-badge">
                 <span class="pulse-dot active" id="pulse-dot"></span>
@@ -82,7 +107,7 @@
             <div class="kpi-value" id="kpi-workers-val">0</div>
             <div class="kpi-label">🤖 Workers</div>
         </div>
-        <div class="kpi-card msg" id="kpi-msgs">
+        <div class="kpi-card msg" id="kpi-msgs" style="display: none;">
             <div class="kpi-value" id="kpi-msgs-val">0</div>
             <div class="kpi-label">💬 Mensajes</div>
         </div>
@@ -159,8 +184,8 @@
         <!-- ============ COLUMNA DERECHA ============ -->
         <div class="col-right">
 
-            <!-- MENSAJERÍA -->
-            <section class="card" id="section-messaging">
+            <!-- MENSAJERÍA (Oculto por petición del usuario de solo ver conexiones) -->
+            <section class="card" id="section-messaging" style="display: none;">
                 <div class="card-header">
                     <div class="card-title">
                         <span class="card-icon">💬</span>
@@ -222,10 +247,73 @@
         </div>
     </main>
 
+        </div> <!-- fin main-content -->
+    </div> <!-- fin app-layout -->
+
     <!-- TOAST NOTIFICATIONS -->
     <div id="toast-container" class="toast-container"></div>
 
+    <!-- MODAL DE CONEXIÓN -->
+    <div class="modal-overlay" id="connect-modal">
+        <div class="modal-content">
+            <div class="modal-title">Conectar a otro Coordinador</div>
+            <div class="modal-desc">
+                Ingresa la URL pública (ej. ngrok) de tu compañero para unirte a su red.
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label class="form-label">URL del compañero</label>
+                <input type="url" id="peer-connect-url" class="input" placeholder="https://link-companero.ngrok-free.dev">
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+                <button class="btn btn-ghost full-width" onclick="closeConnectModal()">Cancelar</button>
+                <button class="btn btn-primary full-width" onclick="submitConnect()">⚡ Conectar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
+    <script>
+        function openConnectModal() {
+            document.getElementById('connect-modal').classList.add('active');
+        }
+        function closeConnectModal() {
+            document.getElementById('connect-modal').classList.remove('active');
+            document.getElementById('peer-connect-url').value = '';
+        }
+        async function submitConnect() {
+            const url = document.getElementById('peer-connect-url').value.trim();
+            if (!url) return alert('Por favor ingresa una URL válida');
+            
+            try {
+                // Obtenemos la config actual
+                const stateRes = await fetch('/election/state');
+                const state = await stateRes.json();
+                
+                // Actualizamos enviando la nueva peerUrl
+                const res = await fetch('/api/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        nodeId: state.id, 
+                        baseUrl: state.url, 
+                        peerUrl: url 
+                    })
+                });
+                
+                if (res.ok) {
+                    closeConnectModal();
+                    alert('¡Conectado exitosamente! El nodo ha sido agregado.');
+                    // Recargar panel para ver cambios
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    const data = await res.json();
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Error de conexión: ' + err.message);
+            }
+        }
+    </script>
 </body>
 
 </html>
