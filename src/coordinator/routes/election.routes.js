@@ -110,6 +110,28 @@ router.post("/election/trigger", async (req, res) => {
     res.json({ ok: true, message: "Elección disparada" });
 });
 
+// ─── POST /election/kill-leader — Tumbar al líder actual remotamente ──────────
+router.post("/election/kill-leader", async (req, res) => {
+    const leaderUrl = engine.leaderUrl;
+    if (!leaderUrl) {
+        return res.status(404).json({ error: "No hay líder conocido" });
+    }
+    // Si yo mismo soy el líder, me dimito directamente
+    if (engine.role === "leader") {
+        await engine.triggerElection();
+        return res.json({ ok: true, message: "Dimisión propia forzada", self: true });
+    }
+    // Si otro nodo es el líder, le envío el trigger remotamente
+    try {
+        const transport = require("../election/transport");
+        await transport.post(`${leaderUrl}/election/trigger`, {}, { timeout: 4000 });
+        res.json({ ok: true, message: `Trigger enviado al líder ${engine.leaderId} (${leaderUrl})` });
+    } catch (err) {
+        res.status(502).json({ error: `No se pudo contactar al líder: ${err.message}` });
+    }
+});
+
+
 // ─── GET /events — Server-Sent Events stream ──────────────────────────────────
 router.get("/events", (req, res) => {
     res.setHeader("Content-Type",  "text/event-stream");

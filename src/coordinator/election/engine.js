@@ -148,8 +148,12 @@ async function _tick() {
             );
 
             const data = resp.data || {};
+
+            // Actualizar el ID real del peer desde su respuesta (usa su NODE_ID letra, no la URL)
+            const resolvedId = data.id || peer.id || url;
             peers.set(url, {
                 ...peer,
+                id:       resolvedId,
                 alive:    true,
                 lastSeen: now,
                 snapshot: data,
@@ -158,16 +162,24 @@ async function _tick() {
             // Descubrimiento transitivo: incorporar peers del peer
             if (Array.isArray(data.peers)) {
                 for (const p of data.peers) {
-                    if (p.url && p.url !== engine.selfUrl && !peers.has(p.url)) {
-                        engine.upsertPeer(p.id, p.url);
-                        logger.gossip(engine.selfId, `Nuevo peer descubierto transitivamente: ${p.id} (${p.url})`);
+                    if (p.url && p.url !== engine.selfUrl) {
+                        if (!peers.has(p.url)) {
+                            engine.upsertPeer(p.id, p.url);
+                            logger.gossip(engine.selfId, `Nuevo peer descubierto transitivamente: ${p.id} (${p.url})`);
+                        } else if (p.id && p.id !== p.url) {
+                            // Actualizar ID si antes teníamos la URL como ID
+                            const existing = peers.get(p.url);
+                            if (existing && (!existing.id || existing.id === p.url)) {
+                                peers.set(p.url, { ...existing, id: p.id });
+                            }
+                        }
                     }
                 }
             }
 
             if (!peer.alive) {
-                logger.recovery(engine.selfId, `Peer recuperado: ${peer.id} (${url})`);
-                events.emit("peer-up", { id: peer.id, url });
+                logger.recovery(engine.selfId, `Peer recuperado: ${resolvedId} (${url})`);
+                events.emit("peer-up", { id: resolvedId, url });
             }
 
         } catch (err) {

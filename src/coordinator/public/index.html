@@ -34,11 +34,25 @@
             <span class="meta-item" id="hdr-term">Término: —</span>
             <span class="meta-item" id="hdr-time">🕐 --:--:--</span>
         </div>
+        <button class="btn btn-danger btn-sm" id="btn-kill-leader" onclick="killLeader()" title="Tumba al líder actual y fuerza una nueva elección">
+            💀 Matar Líder
+        </button>
         <a href="/election.html" class="btn btn-primary btn-sm" id="btn-election-panel">
             🗳️ Panel de Elección
         </a>
     </div>
 </header>
+
+<!-- LEADER BANNER -->
+<div id="leader-banner" style="display:none; background:linear-gradient(90deg,rgba(251,191,36,0.12),rgba(251,191,36,0.04)); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:10px 20px; margin:12px 24px 0; display:flex; align-items:center; gap:14px; font-size:0.9rem;">
+    <span style="font-size:1.4rem">👑</span>
+    <span style="color:var(--text-2)">Líder actual:</span>
+    <span id="leader-banner-id" style="font-weight:700; color:#fbbf24; font-size:1.1rem; letter-spacing:2px">—</span>
+    <span id="leader-banner-url" style="color:var(--text-3); font-size:0.8rem"></span>
+    <span style="margin-left:auto">
+        <button class="btn btn-danger btn-sm" onclick="killLeader()" id="btn-kill-leader-banner">💀 Matar este Líder</button>
+    </span>
+</div>
 
 <!-- KPI BAR -->
 <section class="kpi-bar">
