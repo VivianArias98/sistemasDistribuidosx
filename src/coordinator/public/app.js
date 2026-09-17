@@ -165,16 +165,7 @@ function renderWorkers(workers) {
     `).join("");
 
     // Sincronizar select de mensajería
-    const msgTo = $("msg-to");
-    const existing = new Set([...msgTo.options].map(o => o.value));
-    workers.forEach(w => {
-        if (!existing.has(w.name)) {
-            const opt = document.createElement("option");
-            opt.value = w.name;
-            opt.textContent = w.name;
-            msgTo.appendChild(opt);
-        }
-    });
+    updateMessageDropdown();
 }
 
 // ─── Poll: cluster (peers) ────────────────────────────────
@@ -185,7 +176,24 @@ async function loadCluster() {
         const data = await r.json();
         allPeers = data.peers || [];
         renderPeers(allPeers, data.cluster);
+        updateMessageDropdown();
     } catch {}
+}
+
+function updateMessageDropdown() {
+    const msgTo = $("msg-to");
+    const existing = new Set([...msgTo.options].map(o => o.value));
+    
+    const targets = [...allWorkers.map(w => w.name), ...allPeers.map(p => p.id || p.url)];
+    
+    targets.forEach(name => {
+        if (!existing.has(name)) {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            msgTo.appendChild(opt);
+        }
+    });
 }
 
 function renderPeers(peers, cluster) {

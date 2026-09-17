@@ -124,23 +124,44 @@ router.post("/api/send-message", async (req, res) => {
         return res.json({ success: true, entry });
     }
 
-    const target = registry.resolve(to);
-    if (!target) {
+    let targetUrl = null;
+    let targetStatus = "ACTIVO";
+
+    // 1. Buscar en Naming Service (Workers)
+    const workerTarget = registry.resolve(to);
+    if (workerTarget) {
+        targetUrl = workerTarget.url;
+        targetStatus = workerTarget.status;
+    } else {
+        // 2. Buscar en el Engine (Otros Coordinadores)
+        const engine = require("../election/engine").engine;
+        const peer = engine.knownPeers().find(p => p.id === to || p.url === to);
+        if (peer) {
+            targetUrl = peer.url;
+            targetStatus = peer.alive ? "ACTIVO" : "CAIDO";
+        }
+    }
+
+    if (!targetUrl) {
         entry.status = "FALLIDO";
-        entry.error  = `Destinatario '${to}' no encontrado en el Naming Service`;
+        entry.error  = `Destinatario '${to}' no encontrado en el sistema`;
         return res.status(404).json({ error: entry.error, entry });
     }
-    if (target.status === "CAIDO") {
+    if (targetStatus === "CAIDO") {
         entry.status = "FALLIDO";
         entry.error  = `El destinatario '${to}' está CAÍDO`;
         return res.status(503).json({ error: entry.error, entry, recipientStatus: "CAIDO" });
     }
 
     try {
-        const endpoint = target.url.replace(/\/$/, "") + "/receive-message";
-        const resp = await axios.post(endpoint, { from, to, message, timestamp: entry.timestamp }, { timeout: 4000 });
+        const endpoint = targetUrl.replace(/\/$/, "") + "/receive-message";
+        const axios = require("axios");
+        const resp = await axios.post(endpoint, { from, to, message, timestamp: entry.timestamp }, { 
+            timeout: 4000,
+            headers: { "ngrok-skip-browser-warning": "true" }
+        });
         entry.status    = "ENTREGADO";
-        entry.targetUrl = target.url;
+        entry.targetUrl = targetUrl;
         registry.addMessage(to, entry);
         logger.msg("Mensajería", `Mensaje de '${from}' entregado a '${to}' (${target.url})`);
         return res.json({ success: true, entry, destinationResponse: resp.data });
