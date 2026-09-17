@@ -33,7 +33,8 @@ async function post(url, data = {}, opts = {}) {
 
     // 4. Realizar la petición
     const timeout = opts.timeout || 2000;
-    return axios.post(url, data, { timeout, ...opts });
+    const headers = { ...opts.headers, "ngrok-skip-browser-warning": "true" };
+    return axios.post(url, data, { timeout, ...opts, headers });
 }
 
 /**
@@ -52,7 +53,8 @@ async function get(url, opts = {}) {
     }
     await faults.applyLatency();
     const timeout = opts.timeout || 2000;
-    return axios.get(url, { timeout, ...opts });
+    const headers = { ...opts.headers, "ngrok-skip-browser-warning": "true" };
+    return axios.get(url, { timeout, ...opts, headers });
 }
 
 module.exports = { post, get };
