@@ -103,9 +103,19 @@ async function mainLoop() {
 
             // 3. Iniciar pulsos; si pierde el coordinador → volver a cazar
             await new Promise(resolve => {
-                pulse.start(leaderUrl, WORKER_NAME, () => {
+                pulse.start(leaderUrl, WORKER_NAME, (newLeaderUrl, peers) => {
                     if (status === "registrado") {
                         status = "buscando";
+                        if (peers && Array.isArray(peers)) {
+                            // Enriquecer la lista de coordinadores conocidos para acelerar el Camino Lento
+                            peers.forEach(p => {
+                                if (p.url && !COORDINATORS.includes(p.url)) COORDINATORS.push(p.url);
+                            });
+                        }
+                        // Si nos dan la URL del nuevo líder (Camino Rápido), intentamos ir allá directo en el próximo ciclo
+                        if (newLeaderUrl && !COORDINATORS.includes(newLeaderUrl)) {
+                            COORDINATORS.unshift(newLeaderUrl);
+                        }
                         resolve();
                     }
                 });

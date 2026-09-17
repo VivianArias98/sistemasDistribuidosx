@@ -6,9 +6,9 @@ const COORDINATOR_ENTRY = path.resolve(__dirname, "../src/coordinator/server.js"
 // ─── Configuración de la prueba del profesor ───
 // 3 Nodos, donde cada uno SÓLO conoce a UNO de los otros (Topología en Anillo: A->B, B->C, C->A)
 const nodes = [
-    { id: "A", port: 3001, url: "http://localhost:3001", peer: "http://localhost:3002" },
-    { id: "B", port: 3002, url: "http://localhost:3002", peer: "http://localhost:3003" },
-    { id: "C", port: 3003, url: "http://localhost:3003", peer: "http://localhost:3001" }
+    { id: "A", port: 3000, url: "http://localhost:3000", peer: "http://localhost:3001" },
+    { id: "B", port: 3001, url: "http://localhost:3001", peer: "http://localhost:3002" },
+    { id: "C", port: 3002, url: "http://localhost:3002", peer: "http://localhost:3000" }
 ];
 
 console.log(`\n${"═".repeat(60)}`);

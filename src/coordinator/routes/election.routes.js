@@ -63,9 +63,9 @@ router.get("/election/state", (req, res) => {
         url:       engine.selfUrl,
         role:      engine.role,
         term:      engine.term,
-        leaderId:  engine.leaderId,
+        leader:    engine.leaderId,
         leaderUrl: engine.leaderUrl,
-        peers:     engine.knownPeers(),
+        peers:     engine.knownPeers().map(p => ({ id: p.id, url: p.url, alive: p.alive })),
         faults:    faults.snapshot(),
         uptime:    process.uptime(),
     });

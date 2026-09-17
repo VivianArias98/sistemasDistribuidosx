@@ -6,17 +6,41 @@ const express  = require("express");
 const axios    = require("axios");
 const registry = require("../services/registry");
 const msgStore = require("../services/messages");
+const engine   = require("../election/engine");
 const config   = require("../config");
 const logger   = require("../utils/logger");
 
 const router = express.Router();
+
+// ─── MIDDLEWARE DE LIDERAZGO (Fase 4: Que solo mande el líder) ────────────────
+const ensureLeader = (req, res, next) => {
+    // 1. Si soy el líder, proceso la petición normal
+    if (engine.role === "leader") return next();
+
+    // 2. Si no soy líder, preparo la respuesta con el líder actual y los peers
+    const peers = engine.knownPeers().filter(p => p.alive).map(p => ({ id: p.id, url: p.url, alive: p.alive }));
+
+    if (engine.leaderUrl) {
+        // Sé quién es el líder → 409 (Redirección para el Camino Rápido)
+        return res.status(409).json({ 
+            leader: engine.leaderUrl, 
+            peers 
+        });
+    } else {
+        // No hay líder aún (elección en curso) → 503 (Reintento)
+        return res.status(503).json({ 
+            retry: true, 
+            peers 
+        });
+    }
+};
 
 // ─── NAMING SERVICE ───────────────────────────────────────────────────────────
 
 /**
  * POST /register — Registra un worker con ownership por IP
  */
-router.post("/register", (req, res) => {
+router.post("/register", ensureLeader, (req, res) => {
     let { name, url, platform, hostname } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ error: "El campo 'name' es obligatorio" });
@@ -76,7 +100,7 @@ router.post("/unregister/:name", (req, res) => {
 
 // ─── HEARTBEAT / PULSE ────────────────────────────────────────────────────────
 
-router.post(["/heartbeat/:name", "/pulse/:name"], (req, res) => {
+router.post(["/heartbeat/:name", "/pulse/:name"], ensureLeader, (req, res) => {
     const w = registry.pulse(req.params.name);
     if (!w) return res.status(404).json({ error: `Worker '${req.params.name}' no registrado`, mustRegister: true });
     res.json({ message: "Pulso recibido", status: "ACTIVO", lastHeartbeat: w.lastHeartbeat });
@@ -87,7 +111,7 @@ router.post(["/heartbeat/:name", "/pulse/:name"], (req, res) => {
 /**
  * POST /send-message/:name — Mensaje simple de un worker al coordinador
  */
-router.post("/send-message/:name", (req, res) => {
+router.post("/send-message/:name", ensureLeader, (req, res) => {
     const name = req.params.name;
     const { message } = req.body;
     const ip = registry.clientIp(req);
