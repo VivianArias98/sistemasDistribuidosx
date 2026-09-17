@@ -226,17 +226,34 @@ function renderPeers(peers, cluster) {
         const snap = p.snapshot || {};
         const role = snap.role || "?";
         const roleClass = role === "leader" ? "badge-role-leader" : role === "candidate" ? "badge-role-candidate" : "badge-role-follower";
-        const secsAgo = p.lastSeen ? Math.floor((Date.now() - p.lastSeen) / 1000) : "?";
+        const elapsedStr = p.lastSeen ? Math.floor((Date.now() - p.lastSeen) / 1000) + "s" : "0s";
+        let deleteBtn = "";
+        
+        if (!p.alive) {
+            deleteBtn = `<button class="btn btn-danger btn-sm" style="padding: 2px 5px; font-size: 10px; margin-left: 10px" onclick="deletePeer('${escHtml(p.url)}')" title="Eliminar peer de la memoria">❌</button>`;
+        }
+
         return `
             <tr>
                 <td><span class="status-dot ${p.alive ? "active" : "fallen"}">${p.alive ? "VIVO" : "CAÍDO"}</span></td>
                 <td style="font-weight:600">${escHtml(p.id || "?")}</td>
                 <td><span class="url-cell" title="${escHtml(p.url)}">${escHtml(p.url)}</span></td>
                 <td><span class="badge ${roleClass}">${role}</span></td>
-                <td style="color:var(--text-3)">${secsAgo}s</td>
+                <td style="color:var(--text-3)">${elapsedStr} ${deleteBtn}</td>
             </tr>
         `;
     }).join("");
+}
+
+// ─── Eliminar Peer Manualmente ───────────────────────────────────────────────
+async function deletePeer(url) {
+    try {
+        await fetch(`/election/peers?url=${encodeURIComponent(url)}`, { method: "DELETE" });
+        showToast("Peer eliminado de la memoria", "success");
+        await loadCluster();
+    } catch (err) {
+        showToast("Error eliminando peer", "error");
+    }
 }
 
 function updateKpis() {

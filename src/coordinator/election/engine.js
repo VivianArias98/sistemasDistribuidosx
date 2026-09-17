@@ -94,6 +94,19 @@ const engine = {
     },
 
     /**
+     * Elimina un peer del registro.
+     */
+    removePeer(url) {
+        if (peers.has(url)) {
+            peers.delete(url);
+            logger.info(engine.selfId, `Peer eliminado manualmente: ${url}`);
+            events.emit("cluster-update", { action: "peer-removed", url });
+            return true;
+        }
+        return false;
+    },
+
+    /**
      * Cambia la estrategia de elección en caliente y, si se solicita, la propaga a los peers.
      */
     async setStrategy(name, propagate = false) {
@@ -125,6 +138,15 @@ const engine = {
      */
     async handleElectionMessage(msg, res) {
         if (faults.paused) return res.status(503).json({ error: "Nodo pausado (chaos)" });
+        
+        // Evitar que workers (cuyos IDs son números de puertos como 3000, 3002) 
+        // participen en la elección y se vuelvan líderes.
+        const senderId = msg?.from?.id;
+        if (senderId && !isNaN(Number(senderId))) {
+            logger.info(engine.selfId, `Ignorando mensaje de elección de worker/puerto: ${senderId}`);
+            return res.status(403).json({ error: "Los workers no pueden participar en la elección" });
+        }
+
         await strategy.handleMessage(msg, res);
     },
 };

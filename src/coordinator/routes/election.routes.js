@@ -33,10 +33,16 @@ router.post("/election/ping", (req, res) => {
 
     const { id, url, peers: remotePeers = [] } = req.body;
 
+    // Filtrar IDs numéricos para que los workers/puertos fantasma no entren a la lista de peers del cluster
+    const isValidPeer = (peerId) => peerId && isNaN(Number(peerId));
+
     // Descubrimiento transitivo: incorporar peers del emisor
-    if (id && url) engine.upsertPeer(id, url);
+    if (url && isValidPeer(id)) engine.upsertPeer(id, url);
+    
     for (const p of remotePeers) {
-        if (p.url && p.url !== engine.selfUrl) engine.upsertPeer(p.id, p.url);
+        if (p.url && p.url !== engine.selfUrl && isValidPeer(p.id)) {
+            engine.upsertPeer(p.id, p.url);
+        }
     }
 
     res.json(engine.snapshot());
@@ -131,6 +137,17 @@ router.post("/election/kill-leader", async (req, res) => {
     }
 });
 
+// ─── DELETE /election/peers — Eliminar peer manualmente ───────────────────────
+router.delete("/election/peers", (req, res) => {
+    const url = req.query.url;
+    if (!url) return res.status(400).json({ error: "Falta el parámetro url" });
+    const removed = engine.removePeer(url);
+    if (removed) {
+        res.json({ ok: true, message: `Peer eliminado: ${url}` });
+    } else {
+        res.status(404).json({ error: "Peer no encontrado" });
+    }
+});
 
 // ─── GET /events — Server-Sent Events stream ──────────────────────────────────
 router.get("/events", (req, res) => {
