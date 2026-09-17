@@ -8,7 +8,7 @@ require("dotenv").config();
 const { getTiming } = require("./election/timing");
 
 let NODE_ID  = process.env.NODE_ID  || null;  // null = sin configurar aún
-let PORT     = parseInt(process.env.PORT || "3001", 10);
+let PORT     = parseInt(process.env.PORT || "3000", 10);
 let BASE_URL = process.env.BASE_URL  || `http://localhost:${PORT}`;
 
 // Peers iniciales: lista de URLs separadas por coma
