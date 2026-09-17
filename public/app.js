@@ -1,5 +1,5 @@
 /* =============================================
-   DistributedOS Panel — app.js
+   Vivian-Andrea Panel — app.js
    Lógica completa de la interfaz:
    - Polling de estado en tiempo real
    - Servicio de Nombres
@@ -13,20 +13,20 @@ const API = ''; // Vacío = misma origin (http://localhost:3000)
 
 // Estado local de la app
 let allNodes = [];
-let allLogs  = [];
+let allLogs = [];
 let allMessages = [];
 let logFilterType = '';
 let currentInboxNode = '';
-let currentInboxTab  = 'middleware';
+let currentInboxTab = 'middleware';
 
 // ─────────────────────────────────────────────
 // CLOCK
 // ─────────────────────────────────────────────
 function updateClock() {
     const now = new Date();
-    const hh = String(now.getHours()).padStart(2,'0');
-    const mm = String(now.getMinutes()).padStart(2,'0');
-    const ss = String(now.getSeconds()).padStart(2,'0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
     const el = document.getElementById('hdr-time');
     if (el) el.textContent = `🕐 ${hh}:${mm}:${ss}`;
 }
@@ -152,28 +152,28 @@ function updateSelectors(nodes) {
     const fromVal = from.value;
     from.innerHTML = `<option value="">-- Selecciona remitente --</option>
         <option value="Admin">Admin (Panel Web)</option>
-        ${names.map(n => `<option value="${n}" ${fromVal===n?'selected':''}>${n}</option>`).join('')}`;
+        ${names.map(n => `<option value="${n}" ${fromVal === n ? 'selected' : ''}>${n}</option>`).join('')}`;
     if (fromVal) from.value = fromVal;
 
     // msg-to
     const to = document.getElementById('msg-to');
     const toVal = to.value;
     to.innerHTML = `<option value="">-- Selecciona destinatario --</option>
-        ${names.map(n => `<option value="${n}" ${toVal===n?'selected':''}>${n}</option>`).join('')}`;
+        ${names.map(n => `<option value="${n}" ${toVal === n ? 'selected' : ''}>${n}</option>`).join('')}`;
     if (toVal) to.value = toVal;
 
     // hr-node
     const hr = document.getElementById('hr-node');
     const hrVal = hr.value;
     hr.innerHTML = `<option value="">-- Selecciona nodo --</option>
-        ${names.map(n => `<option value="${n}" ${hrVal===n?'selected':''}>${n}</option>`).join('')}`;
+        ${names.map(n => `<option value="${n}" ${hrVal === n ? 'selected' : ''}>${n}</option>`).join('')}`;
     if (hrVal) hr.value = hrVal;
 
     // sim-node
     const sim = document.getElementById('sim-node');
     const simVal = sim.value;
     sim.innerHTML = `<option value="">-- Selecciona nodo --</option>
-        ${names.map(n => `<option value="${n}" ${simVal===n?'selected':''}>${n}</option>`).join('')}`;
+        ${names.map(n => `<option value="${n}" ${simVal === n ? 'selected' : ''}>${n}</option>`).join('')}`;
     if (simVal) sim.value = simVal;
 
     // inbox-node
@@ -181,13 +181,13 @@ function updateSelectors(nodes) {
 }
 
 function updateSystemBadge(online) {
-    const dot  = document.querySelector('#sys-status-badge .pulse-dot');
+    const dot = document.querySelector('#sys-status-badge .pulse-dot');
     const text = document.getElementById('sys-status-text');
     if (online) {
-        dot.className  = 'pulse-dot active';
+        dot.className = 'pulse-dot active';
         text.textContent = 'Middleware Activo';
     } else {
-        dot.className  = 'pulse-dot fallen';
+        dot.className = 'pulse-dot fallen';
         text.textContent = 'Sin conexión';
     }
 }
@@ -226,7 +226,7 @@ function renderLogs(logs) {
 
     terminal.innerHTML = filtered.map(l => `
         <div class="log-line">
-            <span class="log-time">${l.timeStr || l.timestamp?.substring(11,19) || '--'}</span>
+            <span class="log-time">${l.timeStr || l.timestamp?.substring(11, 19) || '--'}</span>
             <span class="log-type ${l.type}">${l.type}</span>
             <span class="log-server">[${l.server}]</span>
             <span class="log-msg">${l.message}</span>
@@ -271,7 +271,7 @@ function renderMessages(msgs) {
 
     container.innerHTML = msgs.map(m => {
         const date = new Date(m.timestamp);
-        const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+        const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
         const statusClass = m.status === 'ENTREGADO' ? 'entregado' : m.status === 'FALLIDO' ? 'fallido' : 'transito';
 
         return `<div class="msg-item ${statusClass}">
@@ -294,12 +294,12 @@ function renderMessages(msgs) {
 // ─────────────────────────────────────────────
 async function sendMessage() {
     const from = document.getElementById('msg-from').value.trim();
-    const to   = document.getElementById('msg-to').value.trim();
-    const msg  = document.getElementById('msg-text').value.trim();
+    const to = document.getElementById('msg-to').value.trim();
+    const msg = document.getElementById('msg-text').value.trim();
 
     if (!from) return toast('Selecciona un remitente', 'warning');
-    if (!to)   return toast('Selecciona un destinatario', 'warning');
-    if (!msg)  return toast('Escribe un mensaje', 'warning');
+    if (!to) return toast('Selecciona un destinatario', 'warning');
+    if (!msg) return toast('Escribe un mensaje', 'warning');
 
     const btn = document.getElementById('btn-send-msg');
     btn.disabled = true;
@@ -333,7 +333,7 @@ async function sendMessage() {
 // ─────────────────────────────────────────────
 async function testDuplicate() {
     const name = document.getElementById('dup-name').value.trim();
-    const url  = document.getElementById('dup-url').value.trim();
+    const url = document.getElementById('dup-url').value.trim();
 
     if (!name || !url) return toast('Completa el nombre y la URL', 'warning');
 
@@ -359,10 +359,10 @@ async function testDuplicate() {
 // HOTRELOAD
 // ─────────────────────────────────────────────
 async function doHotreload() {
-    const name   = document.getElementById('hr-node').value;
+    const name = document.getElementById('hr-node').value;
     const newUrl = document.getElementById('hr-new-url').value.trim();
 
-    if (!name)   return toast('Selecciona un nodo', 'warning');
+    if (!name) return toast('Selecciona un nodo', 'warning');
     if (!newUrl) return toast('Ingresa la nueva URL', 'warning');
 
     try {
@@ -424,7 +424,7 @@ async function sendStopPulse() {
 
     try {
         const url = node.url.replace(/\/$/, '');
-        const res = await fetch(`${url}/stop-pulse`, { method: 'POST', headers: {'Content-Type':'application/json'} });
+        const res = await fetch(`${url}/stop-pulse`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
         toast(`⛔ Pulso de '${name}' detenido — el Timeout lo detectará en ~15s`, 'warning', 5000);
         showResult('sim-result',
@@ -445,7 +445,7 @@ async function sendStartPulse() {
 
     try {
         const url = node.url.replace(/\/$/, '');
-        await fetch(`${url}/start-pulse`, { method: 'POST', headers: {'Content-Type':'application/json'} });
+        await fetch(`${url}/start-pulse`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         toast(`💓 Pulso de '${name}' reanudado — volverá a ACTIVO pronto`, 'success', 4000);
         showResult('sim-result',
             `💓 Pulso de '${name}' reanudado.\n\nEl Middleware actualizará el estado a ACTIVO al recibir el próximo latido.`,
@@ -484,9 +484,9 @@ async function loadUptime() {
     try {
         const data = await apiGet('/api/observability');
         const secs = data.system.uptimeSeconds;
-        const hh = String(Math.floor(secs / 3600)).padStart(2,'0');
-        const mm = String(Math.floor((secs % 3600) / 60)).padStart(2,'0');
-        const ss = String(secs % 60).padStart(2,'0');
+        const hh = String(Math.floor(secs / 3600)).padStart(2, '0');
+        const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+        const ss = String(secs % 60).padStart(2, '0');
         const el = document.getElementById('hdr-uptime');
         if (el) el.textContent = `⏱ ${hh}:${mm}:${ss}`;
     } catch (e) {
