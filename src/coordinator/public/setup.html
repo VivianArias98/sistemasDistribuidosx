@@ -31,7 +31,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
+    overflow-y: auto;
+    padding: 20px 0;
   }
 
   /* Animated background */
@@ -415,11 +416,22 @@
     }
   }
 
+  // Auto-detectar URL de ngrok
+  fetch('/api/ngrok-url').then(r => r.json()).then(data => {
+    if (data.url) {
+      document.getElementById('my-ngrok').value = data.url;
+      showFeedback('✨ URL de ngrok detectada automáticamente', 'info');
+      // Asegurar que el input se vea resaltado un instante
+      const input = document.getElementById('my-ngrok');
+      input.style.borderColor = 'var(--accent)';
+      setTimeout(() => input.style.borderColor = '', 1000);
+    }
+  }).catch(() => {});
+
   // Auto-detectar si ya hay configuración
   fetch('/election/state').then(r => r.json()).then(data => {
-    if (data.id && data.id !== 'A') {
-      // Ya configurado → redirigir
-      // window.location = '/';
+    if (data.id && data.id !== 'UNCONFIGURED') {
+      window.location = '/';
     }
   }).catch(() => {});
 </script>

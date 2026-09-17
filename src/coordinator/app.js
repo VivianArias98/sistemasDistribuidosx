@@ -29,8 +29,37 @@ app.use((err, req, res, next) => {
     next(err);
 });
 
+// ─── Middleware de Redirección a Setup ─────────────────────────────────────────
+app.use((req, res, next) => {
+    // Si no está configurado, forzar redirección al wizard
+    if (!config.isConfigured) {
+        if (req.path === '/' || req.path === '/index.html' || req.path === '/election.html') {
+            return res.redirect('/setup.html');
+        }
+    }
+    next();
+});
+
 // ─── Archivos estáticos del dashboard ─────────────────────────────────────────
 app.use(express.static(path.join(__dirname, "public")));
+
+// ─── Auto-detectar URL de ngrok (local) ───────────────────────────────────────
+app.get("/api/ngrok-url", async (req, res) => {
+    try {
+        const axios = require("axios");
+        const resp = await axios.get("http://127.0.0.1:4040/api/tunnels", { timeout: 1500 });
+        const tunnel = resp.data.tunnels?.find(t => t.proto === "https");
+        if (tunnel && tunnel.public_url) {
+            return res.json({ url: tunnel.public_url });
+        }
+        res.json({ url: null });
+    } catch (err) {
+        // ngrok no está corriendo o no se puede acceder a la API local
+        console.error("Error auto-detectando ngrok:", err.message);
+        res.json({ url: null });
+    }
+});
+
 
 // ─── Setup Wizard: configurar nodo en caliente ────────────────────────────────
 app.post("/api/setup", async (req, res) => {
