@@ -76,7 +76,8 @@ router.get("/election/state", (req, res) => {
 // ─── GET /cluster — Estado agregado del cluster ───────────────────────────────
 router.get("/cluster", (req, res) => {
     const peers = engine.knownPeers();
-    const snapshots = peers.map(p => p.snapshot).filter(Boolean);
+    const activePeers = peers.filter(p => p.alive);
+    const snapshots = activePeers.map(p => p.snapshot).filter(Boolean);
 
     // Detectar split-brain: ¿hay más de un líder autoproclamado?
     const leaders = snapshots.filter(s => s.role === "leader").map(s => s.id);

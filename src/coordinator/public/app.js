@@ -224,7 +224,7 @@ function renderPeers(peers, cluster) {
 
     tbody.innerHTML = externalPeers.map(p => {
         const snap = p.snapshot || {};
-        const role = snap.role || "?";
+        const role = p.alive ? (snap.role || "?") : "?";
         const roleClass = role === "leader" ? "badge-role-leader" : role === "candidate" ? "badge-role-candidate" : "badge-role-follower";
         const elapsedStr = p.lastSeen ? Math.floor((Date.now() - p.lastSeen) / 1000) + "s" : "0s";
         let deleteBtn = "";
