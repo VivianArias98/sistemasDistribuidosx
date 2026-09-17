@@ -324,20 +324,27 @@ async function simulateFall(name) {
     }
 }
 
-// ─── Matar al Líder (dimisión local) ──────────────────────
-async function killLeader() {
-    const btn = $("btn-kill-leader");
-    btn.disabled = true;
-    btn.textContent = "Disparando...";
+// ─── Desconectar mi Nodo ─────────────────────────────────────
+async function disconnectNode() {
+    const btn = $("btn-kill-node");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Apagando...";
+    }
     try {
-        await fetch("/election/trigger", { method: "POST" });
-        showToast("💀 Elección forzada — este nodo abdica", "success");
-        await loadNodeState();
+        await fetch("/api/shutdown", { method: "POST" });
+        showToast("🔌 Nodo desconectado exitosamente. Se cerrará el proceso en la terminal.", "success");
+        // Dejar la UI en estado desconectado
+        setTimeout(() => {
+            document.body.style.opacity = "0.5";
+            document.body.style.pointerEvents = "none";
+        }, 1500);
     } catch (err) {
-        showToast(`❌ ${err.message}`, "error");
-    } finally {
-        btn.disabled = false;
-        btn.textContent = "💀 Matar Líder";
+        showToast(`❌ Error al desconectar: ${err.message}`, "error");
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "🔌 Desconectar mi Nodo";
+        }
     }
 }
 

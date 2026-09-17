@@ -61,6 +61,15 @@ app.get("/api/ngrok-url", async (req, res) => {
 });
 
 
+// ─── Desconectar/Apagar el Nodo ────────────────────────────────────────────────
+app.post("/api/shutdown", (req, res) => {
+    res.json({ ok: true, message: "Apagando el nodo..." });
+    console.log("🛑 Solicitud de apagado recibida desde la UI. Cerrando...");
+    setTimeout(() => {
+        process.exit(0);
+    }, 500);
+});
+
 // ─── Setup Wizard: configurar nodo en caliente ────────────────────────────────
 app.post("/api/setup", async (req, res) => {
     const { nodeId, baseUrl, peerUrl } = req.body;
