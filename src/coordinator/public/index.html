@@ -1,215 +1,231 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DistributedOS — Panel de Control</title>
-    <meta name="description" content="Panel de control del coordinador del sistema distribuido resiliente con Algoritmo Bully">
+    <title>Vivian-Andrea — Panel de Control</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <meta name="description"
+        content="Panel de control del coordinador del sistema distribuido resiliente con Algoritmo Bully">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
 
-<!-- HEADER -->
-<header class="header">
-    <div class="header-left">
-        <div class="logo">
-            <div class="logo-icon">⬡</div>
-            <div>
-                <span class="logo-title">DistributedOS</span>
-                <span class="logo-sub" id="hdr-node-id">Coordinador —</span>
-            </div>
-        </div>
-    </div>
-    <div class="header-center">
-        <div class="sys-badge" id="sys-status-badge">
-            <span class="pulse-dot active" id="pulse-dot"></span>
-            <span id="sys-status-text">Conectando...</span>
-        </div>
-    </div>
-    <div class="header-right">
-        <div class="header-meta">
-            <span class="meta-item" id="hdr-role">👤 —</span>
-            <span class="meta-item" id="hdr-term">Término: —</span>
-            <span class="meta-item" id="hdr-time">🕐 --:--:--</span>
-        </div>
-        <button class="btn btn-danger btn-sm" id="btn-kill-node" onclick="disconnectNode()" title="Apaga este nodo simulando una caída">
-            🔌 Desconectar mi Nodo
-        </button>
-        <a href="/election.html" class="btn btn-primary btn-sm" id="btn-election-panel">
-            🗳️ Panel de Elección
-        </a>
-    </div>
-</header>
-
-<!-- LEADER BANNER -->
-<div id="leader-banner" style="display:none; background:linear-gradient(90deg,rgba(251,191,36,0.12),rgba(251,191,36,0.04)); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:10px 20px; margin:12px 24px 0; display:flex; align-items:center; gap:14px; font-size:0.9rem;">
-    <span style="font-size:1.4rem">👑</span>
-    <span style="color:var(--text-2)">Líder actual:</span>
-    <span id="leader-banner-id" style="font-weight:700; color:#fbbf24; font-size:1.1rem; letter-spacing:2px">—</span>
-    <span id="leader-banner-url" style="color:var(--text-3); font-size:0.8rem"></span>
-    <span style="margin-left:auto">
-        <button class="btn btn-danger btn-sm" onclick="killLeader()" id="btn-kill-leader-banner">💀 Matar este Líder</button>
-    </span>
-</div>
-
-<!-- KPI BAR -->
-<section class="kpi-bar">
-    <div class="kpi-card" id="kpi-total">
-        <div class="kpi-value" id="kpi-total-val">0</div>
-        <div class="kpi-label">Peers del Cluster</div>
-    </div>
-    <div class="kpi-card active" id="kpi-active">
-        <div class="kpi-value" id="kpi-active-val">0</div>
-        <div class="kpi-label">🟢 Vivos</div>
-    </div>
-    <div class="kpi-card fallen" id="kpi-fallen">
-        <div class="kpi-value" id="kpi-fallen-val">0</div>
-        <div class="kpi-label">🔴 Caídos</div>
-    </div>
-    <div class="kpi-card workers" id="kpi-workers">
-        <div class="kpi-value" id="kpi-workers-val">0</div>
-        <div class="kpi-label">🤖 Workers</div>
-    </div>
-    <div class="kpi-card msg" id="kpi-msgs">
-        <div class="kpi-value" id="kpi-msgs-val">0</div>
-        <div class="kpi-label">💬 Mensajes</div>
-    </div>
-</section>
-
-<!-- MAIN GRID -->
-<main class="main-grid">
-
-    <!-- ============ COLUMNA IZQUIERDA ============ -->
-    <div class="col-left">
-
-        <!-- WORKERS (Naming Service) -->
-        <section class="card" id="section-naming">
-            <div class="card-header">
-                <div class="card-title">
-                    <span class="card-icon">🤖</span>
-                    Workers Registrados
-                    <span class="badge badge-info" id="naming-count">0 workers</span>
-                </div>
-                <button class="btn btn-ghost btn-sm" onclick="loadAll()">↻ Actualizar</button>
-            </div>
-
-            <div class="table-wrap" id="nodes-table-wrap">
-                <table class="nodes-table">
-                    <thead>
-                        <tr>
-                            <th>Estado</th>
-                            <th>Nombre</th>
-                            <th>URL</th>
-                            <th>Sin pulso</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="nodes-tbody">
-                        <tr><td colspan="5" class="empty-cell">Sin workers registrados aún...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- PEERS DEL CLUSTER -->
-        <section class="card" id="section-peers">
-            <div class="card-header">
-                <div class="card-title">
-                    <span class="card-icon">🔗</span>
-                    Peers del Cluster
-                    <span class="badge badge-info" id="peers-count">0 peers</span>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <div class="logo-icon">⬡</div>
+                <div>
+                    <span class="logo-title">Vivian-Andrea</span>
+                    <span class="logo-sub" id="hdr-node-id">Coordinador —</span>
                 </div>
             </div>
-            <div class="table-wrap">
-                <table class="nodes-table">
-                    <thead>
-                        <tr>
-                            <th>Estado</th>
-                            <th>ID</th>
-                            <th>URL</th>
-                            <th>Rol</th>
-                            <th>Último ping</th>
-                        </tr>
-                    </thead>
-                    <tbody id="peers-tbody">
-                        <tr><td colspan="5" class="empty-cell">Sin peers conocidos...</td></tr>
-                    </tbody>
-                </table>
+        </div>
+        <div class="header-center">
+            <div class="sys-badge" id="sys-status-badge">
+                <span class="pulse-dot active" id="pulse-dot"></span>
+                <span id="sys-status-text">Conectando...</span>
             </div>
-        </section>
+        </div>
+        <div class="header-right">
+            <div class="header-meta">
+                <span class="meta-item" id="hdr-role">👤 —</span>
+                <span class="meta-item" id="hdr-term">Término: —</span>
+                <span class="meta-item" id="hdr-time">🕐 --:--:--</span>
+            </div>
+            <button class="btn btn-danger btn-sm" id="btn-kill-node" onclick="disconnectNode()"
+                title="Apaga este nodo simulando una caída">
+                🔌 Desconectar mi Nodo
+            </button>
+            <a href="/election.html" class="btn btn-primary btn-sm" id="btn-election-panel">
+                🗳️ Panel de Elección
+            </a>
+        </div>
+    </header>
 
+    <!-- LEADER BANNER -->
+    <div id="leader-banner"
+        style="display:none; background:linear-gradient(90deg,rgba(251,191,36,0.12),rgba(251,191,36,0.04)); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:10px 20px; margin:12px 24px 0; display:flex; align-items:center; gap:14px; font-size:0.9rem;">
+        <span style="font-size:1.4rem">👑</span>
+        <span style="color:var(--text-2)">Líder actual:</span>
+        <span id="leader-banner-id"
+            style="font-weight:700; color:#fbbf24; font-size:1.1rem; letter-spacing:2px">—</span>
+        <span id="leader-banner-url" style="color:var(--text-3); font-size:0.8rem"></span>
+        <span style="margin-left:auto">
+            <button class="btn btn-danger btn-sm" onclick="killLeader()" id="btn-kill-leader-banner">💀 Matar este
+                Líder</button>
+        </span>
     </div>
 
-    <!-- ============ COLUMNA DERECHA ============ -->
-    <div class="col-right">
+    <!-- KPI BAR -->
+    <section class="kpi-bar">
+        <div class="kpi-card" id="kpi-total">
+            <div class="kpi-value" id="kpi-total-val">0</div>
+            <div class="kpi-label">Peers del Cluster</div>
+        </div>
+        <div class="kpi-card active" id="kpi-active">
+            <div class="kpi-value" id="kpi-active-val">0</div>
+            <div class="kpi-label">🟢 Vivos</div>
+        </div>
+        <div class="kpi-card fallen" id="kpi-fallen">
+            <div class="kpi-value" id="kpi-fallen-val">0</div>
+            <div class="kpi-label">🔴 Caídos</div>
+        </div>
+        <div class="kpi-card workers" id="kpi-workers">
+            <div class="kpi-value" id="kpi-workers-val">0</div>
+            <div class="kpi-label">🤖 Workers</div>
+        </div>
+        <div class="kpi-card msg" id="kpi-msgs">
+            <div class="kpi-value" id="kpi-msgs-val">0</div>
+            <div class="kpi-label">💬 Mensajes</div>
+        </div>
+    </section>
 
-        <!-- MENSAJERÍA -->
-        <section class="card" id="section-messaging">
-            <div class="card-header">
-                <div class="card-title">
-                    <span class="card-icon">💬</span>
-                    Enviar Mensaje
-                </div>
-            </div>
+    <!-- MAIN GRID -->
+    <main class="main-grid">
 
-            <div class="msg-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">De</label>
-                        <select id="msg-from" class="input select">
-                            <option value="Admin">Admin (Panel Web)</option>
-                        </select>
+        <!-- ============ COLUMNA IZQUIERDA ============ -->
+        <div class="col-left">
+
+            <!-- WORKERS (Naming Service) -->
+            <section class="card" id="section-naming">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon">🤖</span>
+                        Workers Registrados
+                        <span class="badge badge-info" id="naming-count">0 workers</span>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Para</label>
-                        <select id="msg-to" class="input select">
-                            <option value="">— Selecciona —</option>
-                            <option value="Coordinador">Coordinador</option>
-                        </select>
+                    <button class="btn btn-ghost btn-sm" onclick="loadAll()">↻ Actualizar</button>
+                </div>
+
+                <div class="table-wrap" id="nodes-table-wrap">
+                    <table class="nodes-table">
+                        <thead>
+                            <tr>
+                                <th>Estado</th>
+                                <th>Nombre</th>
+                                <th>URL</th>
+                                <th>Sin pulso</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="nodes-tbody">
+                            <tr>
+                                <td colspan="5" class="empty-cell">Sin workers registrados aún...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- PEERS DEL CLUSTER -->
+            <section class="card" id="section-peers">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon">🔗</span>
+                        Peers del Cluster
+                        <span class="badge badge-info" id="peers-count">0 peers</span>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Mensaje</label>
-                    <textarea id="msg-text" class="input textarea" placeholder="Escribe tu mensaje aquí..."></textarea>
+                <div class="table-wrap">
+                    <table class="nodes-table">
+                        <thead>
+                            <tr>
+                                <th>Estado</th>
+                                <th>ID</th>
+                                <th>URL</th>
+                                <th>Rol</th>
+                                <th>Último ping</th>
+                            </tr>
+                        </thead>
+                        <tbody id="peers-tbody">
+                            <tr>
+                                <td colspan="5" class="empty-cell">Sin peers conocidos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-                <button class="btn btn-primary full-width" onclick="sendMessage()" id="btn-send-msg">
-                    ➤ Enviar Mensaje
-                </button>
-                <div id="send-result" class="result-box hidden"></div>
-            </div>
+            </section>
 
-            <!-- Historial de mensajes -->
-            <div class="sub-section">
-                <div class="sub-title">📨 Historial</div>
-                <div id="msg-history" class="msg-history">
-                    <div class="empty-cell">Sin mensajes aún...</div>
+        </div>
+
+        <!-- ============ COLUMNA DERECHA ============ -->
+        <div class="col-right">
+
+            <!-- MENSAJERÍA -->
+            <section class="card" id="section-messaging">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon">💬</span>
+                        Enviar Mensaje
+                    </div>
                 </div>
-            </div>
-        </section>
 
-        <!-- OBSERVABILIDAD — LOGS EN VIVO -->
-        <section class="card" id="section-observability">
-            <div class="card-header">
-                <div class="card-title">
-                    <span class="card-icon">📡</span>
-                    Eventos en Vivo (SSE)
-                    <span class="badge badge-live">EN VIVO</span>
+                <div class="msg-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">De</label>
+                            <select id="msg-from" class="input select">
+                                <option value="Admin">Admin (Panel Web)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Para</label>
+                            <select id="msg-to" class="input select">
+                                <option value="">— Selecciona —</option>
+                                <option value="Coordinador">Coordinador</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mensaje</label>
+                        <textarea id="msg-text" class="input textarea"
+                            placeholder="Escribe tu mensaje aquí..."></textarea>
+                    </div>
+                    <button class="btn btn-primary full-width" onclick="sendMessage()" id="btn-send-msg">
+                        ➤ Enviar Mensaje
+                    </button>
+                    <div id="send-result" class="result-box hidden"></div>
                 </div>
-                <button class="btn btn-ghost btn-sm" onclick="clearLogs()">✕ Limpiar</button>
-            </div>
-            <div class="terminal" id="log-terminal">
-                <div class="terminal-placeholder">Conectando a stream de eventos...</div>
-            </div>
-        </section>
 
-    </div>
-</main>
+                <!-- Historial de mensajes -->
+                <div class="sub-section">
+                    <div class="sub-title">📨 Historial</div>
+                    <div id="msg-history" class="msg-history">
+                        <div class="empty-cell">Sin mensajes aún...</div>
+                    </div>
+                </div>
+            </section>
 
-<!-- TOAST NOTIFICATIONS -->
-<div id="toast-container" class="toast-container"></div>
+            <!-- OBSERVABILIDAD — LOGS EN VIVO -->
+            <section class="card" id="section-observability">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon">📡</span>
+                        Eventos en Vivo (SSE)
+                        <span class="badge badge-live">EN VIVO</span>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" onclick="clearLogs()">✕ Limpiar</button>
+                </div>
+                <div class="terminal" id="log-terminal">
+                    <div class="terminal-placeholder">Conectando a stream de eventos...</div>
+                </div>
+            </section>
 
-<script src="app.js"></script>
+        </div>
+    </main>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="app.js"></script>
 </body>
+
 </html>
