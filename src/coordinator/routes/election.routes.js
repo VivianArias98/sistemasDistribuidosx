@@ -38,6 +38,8 @@ router.post("/election/ping", (req, res) => {
     // Un ID válido debe ser texto corto (ej. "A", "B", "Nodo1") y no ser una URL.
     const isValidPeer = (peerId) => {
         if (!peerId) return false;
+        if (typeof peerId === "object") return false; // Bloquea objetos puros
+        if (String(peerId) === "[object Object]") return false; // Bloquea objetos stringificados
         if (!isNaN(Number(peerId))) return false; // Bloquea 3000, 3002
         if (String(peerId).startsWith("http")) return false; // Bloquea URLs
         if (String(peerId).length > 20) return false; // Bloquea strings larguísimos basura
