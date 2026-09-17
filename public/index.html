@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DistributedOS — Panel de Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+    <div class="header-left">
+        <div class="logo">
+            <div class="logo-icon">⬡</div>
+            <div>
+                <span class="logo-title">DistributedOS</span>
+                <span class="logo-sub">Middleware Panel</span>
+            </div>
+        </div>
+    </div>
+    <div class="header-center">
+        <div class="sys-badge" id="sys-status-badge">
+            <span class="pulse-dot active"></span>
+            <span id="sys-status-text">Conectando...</span>
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="header-meta">
+            <span class="meta-item" id="hdr-uptime">⏱ --</span>
+            <span class="meta-item" id="hdr-timeout">⚠ Timeout: 15s</span>
+            <span class="meta-item" id="hdr-time">🕐 --:--:--</span>
+        </div>
+    </div>
+</header>
+
+<!-- KPI BAR -->
+<section class="kpi-bar">
+    <div class="kpi-card" id="kpi-total">
+        <div class="kpi-value" id="kpi-total-val">0</div>
+        <div class="kpi-label">Nodos Registrados</div>
+    </div>
+    <div class="kpi-card active" id="kpi-active">
+        <div class="kpi-value" id="kpi-active-val">0</div>
+        <div class="kpi-label">🟢 Activos</div>
+    </div>
+    <div class="kpi-card fallen" id="kpi-fallen">
+        <div class="kpi-value" id="kpi-fallen-val">0</div>
+        <div class="kpi-label">🔴 Caídos</div>
+    </div>
+    <div class="kpi-card msg" id="kpi-msgs">
+        <div class="kpi-value" id="kpi-msgs-val">0</div>
+        <div class="kpi-label">💬 Enviados</div>
+    </div>
+    <div class="kpi-card inbox" id="kpi-inbox">
+        <div class="kpi-value" id="kpi-inbox-val">0</div>
+        <div class="kpi-label">📥 Recibidos</div>
+    </div>
+</section>
+
+<!-- MAIN GRID -->
+<main class="main-grid">
+
+    <!-- ============ COLUMNA IZQUIERDA ============ -->
+    <div class="col-left">
+
+        <!-- NAMING SERVICE -->
+        <section class="card" id="section-naming">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="card-icon">🗂</span>
+                    Servicio de Nombres
+                    <span class="badge badge-info" id="naming-count">0 nodos</span>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="loadStatus()">↻ Actualizar</button>
+            </div>
+
+            <div class="table-wrap" id="nodes-table-wrap">
+                <table class="nodes-table">
+                    <thead>
+                        <tr>
+                            <th>Estado</th>
+                            <th>Nombre</th>
+                            <th>URL</th>
+                            <th>Plataforma</th>
+                            <th>Sin pulso</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nodes-tbody">
+                        <tr><td colspan="6" class="empty-cell">Sin nodos registrados aún...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Prueba de robustez: nombre duplicado -->
+            <div class="sub-section">
+                <div class="sub-title">🔒 Prueba de Robustez — Nombre Duplicado</div>
+                <div class="form-row">
+                    <input type="text" id="dup-name" class="input" placeholder="Nombre a duplicar (ej: Nodo1)">
+                    <input type="text" id="dup-url" class="input" placeholder="URL diferente (ej: http://localhost:9999)">
+                    <button class="btn btn-danger btn-sm" onclick="testDuplicate()">Intentar Duplicar</button>
+                </div>
+                <div id="dup-result" class="result-box hidden"></div>
+            </div>
+        </section>
+
+        <!-- MENSAJERÍA DISTRIBUIDA -->
+        <section class="card" id="section-messaging">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="card-icon">💬</span>
+                    Enviar Mensaje
+                </div>
+            </div>
+
+            <div class="msg-form">
+                <div class="form-group">
+                    <label class="form-label">De (Remitente)</label>
+                    <select id="msg-from" class="input select">
+                        <option value="">-- Selecciona remitente --</option>
+                        <option value="Admin">Admin (Panel Web)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Para (Destinatario)</label>
+                    <select id="msg-to" class="input select" onchange="updateTargetUrl()">
+                        <option value="">-- Selecciona destinatario --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">URL de destino resolvida por el Naming Service</label>
+                    <input type="text" id="resolved-url" class="input code-input" readonly placeholder="Se completa automáticamente...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mensaje</label>
+                    <textarea id="msg-text" class="input textarea" placeholder="Escribe tu mensaje aquí..."></textarea>
+                </div>
+                <button class="btn btn-primary full-width" onclick="sendMessage()" id="btn-send-msg">
+                    ➤ Enviar Mensaje
+                </button>
+                <div id="send-result" class="result-box hidden"></div>
+            </div>
+
+            <!-- Historial general de mensajes -->
+            <div class="sub-section">
+                <div class="sub-title">📨 Historial General de Mensajes</div>
+                <div id="msg-history" class="msg-history">
+                    <div class="empty-cell">Sin mensajes aún...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ╔══════════════════════════════════════════╗ -->
+        <!-- ║    BANDEJA DE ENTRADA (INBOX)            ║ -->
+        <!-- ╚══════════════════════════════════════════╝ -->
+        <section class="card inbox-card" id="section-inbox">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="card-icon">📥</span>
+                    Bandeja de Entrada
+                    <span class="badge badge-inbox" id="inbox-count">0 mensajes</span>
+                    <span class="badge badge-live">EN VIVO</span>
+                </div>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <select id="inbox-node" class="input select-sm" onchange="loadInbox()">
+                        <option value="">— Selecciona un nodo —</option>
+                    </select>
+                    <button class="btn btn-ghost btn-sm" onclick="loadInbox()">↻</button>
+                </div>
+            </div>
+
+            <div class="info-box" style="margin:0.75rem 1.2rem 0;">
+                📡 Aquí ves los mensajes que recibió un nodo. <strong>Pestaña Middleware</strong>: registros del padre (mensajes entregados a través del sistema). <strong>Pestaña Nodo</strong>: consulta directamente al miniServer su propia bandeja local.
+            </div>
+
+            <!-- Tabs -->
+            <div class="inbox-tabs">
+                <button class="inbox-tab active" id="tab-middleware" onclick="switchInboxTab('middleware')">
+                    📬 Vía Middleware
+                </button>
+                <button class="inbox-tab" id="tab-node" onclick="switchInboxTab('node')">
+                    📥 Directos al Nodo
+                </button>
+            </div>
+
+            <!-- Panel Middleware -->
+            <div id="inbox-panel-middleware" class="inbox-panel">
+                <div id="inbox-middleware-list" class="msg-history" style="max-height:340px; padding:0.75rem 1.2rem 1rem;">
+                    <div class="empty-cell">Selecciona un nodo arriba para ver los mensajes que le llegaron...</div>
+                </div>
+            </div>
+
+            <!-- Panel Nodo directo -->
+            <div id="inbox-panel-node" class="inbox-panel" style="display:none;">
+                <div id="inbox-node-url-display" class="info-box" style="margin:0.75rem 1.2rem 0; font-family:var(--font-mono); font-size:0.73rem; color:var(--cyan);">
+                    🌐 URL del nodo: —
+                </div>
+                <div id="inbox-node-list" class="msg-history" style="max-height:280px; padding:0.75rem 1.2rem 1rem;">
+                    <div class="empty-cell">Selecciona un nodo para consultar su bandeja directa...</div>
+                </div>
+                <div style="padding: 0 1.2rem 1rem;">
+                    <button class="btn btn-ghost btn-sm full-width" onclick="fetchNodeInbox()">↻ Consultar bandeja del nodo ahora</button>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ============ COLUMNA DERECHA ============ -->
+    <div class="col-right">
+
+        <!-- HOTRELOAD -->
+        <section class="card" id="section-hotreload">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="card-icon">🔄</span>
+                    Hotreload — Cambio de URL en Caliente
+                </div>
+            </div>
+            <div class="sub-section">
+                <div class="sub-title">Actualizar URL de un Nodo</div>
+                <div class="form-group">
+                    <label class="form-label">Seleccionar Nodo</label>
+                    <select id="hr-node" class="input select">
+                        <option value="">-- Selecciona nodo --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nueva URL (ej: nueva URL de ngrok)</label>
+                    <input type="text" id="hr-new-url" class="input" placeholder="https://nueva-url.ngrok-free.dev">
+                </div>
+                <button class="btn btn-warning full-width" onclick="doHotreload()">🔄 Actualizar URL en Caliente</button>
+                <div id="hr-result" class="result-box hidden"></div>
+            </div>
+
+            <div class="sub-section">
+                <div class="sub-title">Actualizar URL del Padre (Middleware)</div>
+                <div class="form-group">
+                    <label class="form-label">Nueva URL pública del Middleware</label>
+                    <input type="text" id="hr-parent-url" class="input" placeholder="https://nuevo-padre.ngrok-free.dev">
+                </div>
+                <button class="btn btn-warning full-width" onclick="doParentHotreload()">🔄 Actualizar URL del Padre</button>
+                <div id="hr-parent-result" class="result-box hidden"></div>
+            </div>
+        </section>
+
+        <!-- SIMULADOR DE TIMEOUT / CAÍDAS -->
+        <section class="card" id="section-simulator">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="card-icon">🧪</span>
+                    Simulador de Caídas y Timeout
+                </div>
+            </div>
+            <div class="info-box">
+                ℹ️ Simula una caída enviando <code>POST /stop-pulse</code> al nodo, o marca uno como CAÍDO desde el Middleware. Tras 15 segundos sin pulso, el Timeout lo detecta automáticamente.
+            </div>
+            <div class="form-group" style="margin: 1rem 1.2rem 0;">
+                <label class="form-label">Seleccionar Nodo</label>
+                <select id="sim-node" class="input select">
+                    <option value="">-- Selecciona nodo --</option>
+                </select>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-danger" onclick="simulateFall()">🔴 Simular Caída</button>
+                <button class="btn btn-success" onclick="sendStopPulse()">⛔ Detener Pulso</button>
+                <button class="btn btn-primary" onclick="sendStartPulse()">💓 Reanudar Pulso</button>
+            </div>
+            <div id="sim-result" class="result-box hidden" style="margin:0 1.2rem 1rem;"></div>
+        </section>
+
+        <!-- OBSERVABILIDAD — LOGS EN VIVO -->
+        <section class="card" id="section-observability">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="card-icon">📊</span>
+                    Consola de Observabilidad
+                    <span class="badge badge-live">EN VIVO</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <select id="log-filter" class="input select-sm" onchange="filterLogs()">
+                        <option value="">Todos</option>
+                        <option value="REGISTRO">REGISTRO</option>
+                        <option value="PULSO">PULSO</option>
+                        <option value="MENSAJE">MENSAJE</option>
+                        <option value="TIMEOUT">TIMEOUT</option>
+                        <option value="HOTRELOAD">HOTRELOAD</option>
+                        <option value="RECUPERACION">RECUPERACION</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                    <button class="btn btn-ghost btn-sm" onclick="clearLogs()">✕ Limpiar</button>
+                </div>
+            </div>
+            <div class="terminal" id="log-terminal">
+                <div class="terminal-placeholder">Esperando actividad del sistema...</div>
+            </div>
+        </section>
+
+    </div>
+</main>
+
+<!-- TOAST NOTIFICATIONS -->
+<div id="toast-container" class="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
