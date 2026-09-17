@@ -33,8 +33,15 @@ router.post("/election/ping", (req, res) => {
 
     const { id, url, peers: remotePeers = [] } = req.body;
 
-    // Filtrar IDs numéricos para que los workers/puertos fantasma no entren a la lista de peers del cluster
-    const isValidPeer = (peerId) => peerId && isNaN(Number(peerId));
+    // Filtrar IDs numéricos y URLs para que los workers/puertos fantasma no entren a la lista de peers del cluster
+    // Un ID válido debe ser texto corto (ej. "A", "B", "Nodo1") y no ser una URL.
+    const isValidPeer = (peerId) => {
+        if (!peerId) return false;
+        if (!isNaN(Number(peerId))) return false; // Bloquea 3000, 3002
+        if (String(peerId).startsWith("http")) return false; // Bloquea URLs
+        if (String(peerId).length > 20) return false; // Bloquea strings larguísimos basura
+        return true;
+    };
 
     // Descubrimiento transitivo: incorporar peers del emisor
     if (url && isValidPeer(id)) engine.upsertPeer(id, url);
