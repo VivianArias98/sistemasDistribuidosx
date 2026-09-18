@@ -107,6 +107,17 @@ app.post("/api/setup", async (req, res) => {
 
     if (cleanPeer) {
         const transport = require("./election/transport");
+        const { engine: eng } = require("./election/engine");
+
+        // 1. Handshake via gossip ping (compatible con formato Juan Diego: { from: {...} })
+        const snap = eng.snapshot();
+        const pingPayload = {
+            ...snap,
+            from: { id: snap.id, url: snap.url, role: snap.role, currentLeader: snap.leader, term: snap.term },
+        };
+        transport.post(`${cleanPeer}/election/ping`, pingPayload, { timeout: 3000 }).catch(() => {});
+
+        // 2. Intentar registro como worker (best-effort; puede fallar si el peer no es el líder)
         transport.post(
             `${cleanPeer}/register`,
             {

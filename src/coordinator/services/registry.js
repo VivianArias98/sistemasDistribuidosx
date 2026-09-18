@@ -27,6 +27,15 @@ function clientIp(req) {
  * @returns {{ worker, created: boolean, reactivated: boolean }}
  */
 function register(name, url, ip, meta = {}) {
+    // Eliminar cualquier otro worker registrado previamente con esta misma URL exacta 
+    // (previene ghost workers si el nodo cambia de ID/nombre pero mantiene su ngrok/URL)
+    for (const [existingName, w] of workers.entries()) {
+        if (w.url === url && existingName !== name) {
+            workers.delete(existingName);
+            logger.warn("Registry", `Se eliminó worker obsoleto '${existingName}' porque la URL ${url} ahora pertenece a '${name}'`);
+        }
+    }
+
     const existing = workers.get(name);
 
     if (existing) {
@@ -121,6 +130,22 @@ function unregister(name) {
 }
 
 /**
+ * Purga del registro al propio nodo (si se autoregistró antes que los guards estuvieran activos).
+ * Compara por nombre y por URL.
+ * @param {string} selfId
+ * @param {string} selfUrl
+ */
+function removeSelf(selfId, selfUrl) {
+    const cleanSelfUrl = (selfUrl || "").replace(/\/$/, "");
+    for (const [name, w] of workers) {
+        const wUrl = (w.url || "").replace(/\/$/, "");
+        if (name === selfId || wUrl === cleanSelfUrl) {
+            workers.delete(name);
+        }
+    }
+}
+
+/**
  * Agrega un mensaje al historial del worker.
  */
 function addMessage(name, entry) {
@@ -128,4 +153,4 @@ function addMessage(name, entry) {
     if (w) w.messages.push(entry);
 }
 
-module.exports = { register, pulse, resolve, list, markFallen, unregister, addMessage, clientIp };
+module.exports = { register, pulse, resolve, list, markFallen, unregister, removeSelf, addMessage, clientIp };

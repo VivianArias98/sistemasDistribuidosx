@@ -174,24 +174,45 @@ function renderWorkers(workers) {
     if (!tbody) return;
 
     if (workers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">Sin workers registrados aún...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">Sin workers registrados aún...</td></tr>';
         return;
     }
 
-    tbody.innerHTML = workers.map(w => `
-        <tr>
-            <td><span class="status-dot ${w.status === "ACTIVO" ? "active" : "fallen"}">${w.status === "ACTIVO" ? "ACTIVO" : "CAÍDO"}</span></td>
-            <td style="font-weight:600">${escHtml(w.name)}</td>
-            <td><span class="url-cell" title="${escHtml(w.url)}">${escHtml(w.url)}</span></td>
-            <td style="color:${w.hasPulse ? "var(--green)" : "var(--red)"}">${w.secondsWithoutPulse}s</td>
-            <td>
-                <div class="btn-group-row">
-                    <button class="btn btn-danger btn-sm" onclick="simulateFall('${escHtml(w.name)}')">⬇ Caída</button>
-                    <button class="btn btn-ghost btn-sm" onclick="disconnectWorker('${escHtml(w.name)}')" title="Desconectar este worker">🔌 Desconectar</button>
-                </div>
-            </td>
-        </tr>
-    `).join("");
+    tbody.innerHTML = workers.map(w => {
+        let role = (w.role || "worker").toLowerCase();
+        
+        // Sincronizar el rol real desde la red de gossip (engine) si conocemos esta URL
+        if (typeof allPeers !== 'undefined' && Array.isArray(allPeers)) {
+            const clusterPeer = allPeers.find(p => {
+                const pUrl = (p.url || "").replace(/\/$/, "");
+                const wUrl = (w.url || "").replace(/\/$/, "");
+                return pUrl === wUrl;
+            });
+            if (clusterPeer && clusterPeer.snapshot && clusterPeer.snapshot.role) {
+                role = clusterPeer.snapshot.role.toLowerCase();
+            }
+        }
+        const roleClass = role === "leader" ? "badge-role-leader" 
+                        : role === "candidate" ? "badge-role-candidate" 
+                        : role === "follower" ? "badge-role-follower" 
+                        : "badge-role-worker";
+
+        return `
+            <tr>
+                <td><span class="status-dot ${w.status === "ACTIVO" ? "active" : "fallen"}">${w.status === "ACTIVO" ? "ACTIVO" : "CAÍDO"}</span></td>
+                <td style="font-weight:600">${escHtml(w.name)}</td>
+                <td><span class="url-cell" title="${escHtml(w.url)}">${escHtml(w.url)}</span></td>
+                <td><span class="badge ${roleClass}">${role.toUpperCase()}</span></td>
+                <td style="color:${w.hasPulse ? "var(--green)" : "var(--red)"}">${w.secondsWithoutPulse}s</td>
+                <td>
+                    <div class="btn-group-row">
+                        <button class="btn btn-danger btn-sm" onclick="simulateFall('${escHtml(w.name)}')">⬇ Caída</button>
+                        <button class="btn btn-ghost btn-sm" onclick="disconnectWorker('${escHtml(w.name)}')" title="Desconectar este worker">🔌 Desconectar</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join("");
 
     // Sincronizar select de mensajería
     updateMessageDropdown();
@@ -211,6 +232,7 @@ async function loadCluster() {
 
 function updateMessageDropdown() {
     const msgTo = $("msg-to");
+    if (!msgTo) return;
     const existing = new Set([...msgTo.options].map(o => o.value));
     
     const targets = [...allWorkers.map(w => w.name), ...allPeers.map(p => p.id || p.url)];
@@ -239,7 +261,7 @@ function renderPeers(peers, cluster) {
     if ($("kpi-fallen-val")) $("kpi-fallen-val").textContent = validPeers.filter(p => !p.alive).length;
 
     if (validPeers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">No te has conectado a ningún servidor externo aún. Haz clic en "⚡ Conectar a Otro" para unirte a un compañero.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">No te has conectado a ningún servidor externo aún. Haz clic en "⚡ Conectar a Otro" para unirte a un compañero.</td></tr>';
         return;
     }
 
@@ -247,15 +269,39 @@ function renderPeers(peers, cluster) {
         const snap = p.snapshot || {};
         const role = p.alive ? (snap.role || "peer") : "desconectado";
         const roleClass = role === "leader" ? "badge-role-leader" : role === "candidate" ? "badge-role-candidate" : "badge-role-follower";
-        const elapsedStr = p.lastSeen ? Math.floor((Date.now() - p.lastSeen) / 1000) + "s" : "0s";
+        const elapsedSecs = p.lastSeen ? Math.floor((Date.now() - p.lastSeen) / 1000) : 0;
+        const elapsedStr = elapsedSecs + "s";
+        
+        // Calcular número de vecinos que conoce el peer remoto
+        let vecinosCount = 0;
+        if (Array.isArray(snap.peers)) {
+            vecinosCount = snap.peers.length;
+        }
+
+        // Determinar estado visual (Activo, Fallando, Caído)
+        let statusText = "CONECTADO";
+        let statusClass = "active";
+        
+        if (!p.alive) {
+            statusText = "SIN RESPUESTA";
+            statusClass = "fallen";
+        } else if (elapsedSecs >= 3) {
+            statusText = "FALLANDO...";
+            statusClass = "failing"; // Necesitamos agregar estilo para esto (ej. amarillo/naranja)
+        }
 
         return `
             <tr>
-                <td><span class="status-dot ${p.alive ? "active" : "fallen"}">${p.alive ? "CONECTADO" : "SIN RESPUESTA"}</span></td>
+                <td><span class="status-dot ${statusClass}" ${statusClass==='failing' ? 'style="color: var(--orange);"' : ''}>${statusText}</span></td>
                 <td style="font-weight:600; color:var(--text-1);">${escHtml(p.id || "?")}</td>
                 <td><span class="url-cell" title="${escHtml(p.url)}">${escHtml(p.url)}</span></td>
                 <td><span class="badge ${roleClass}">${role.toUpperCase()}</span></td>
-                <td style="color:var(--text-3)">${elapsedStr}</td>
+                <td style="color:var(--text-2); font-weight: 500;">
+                    <span style="background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 12px; font-size: 0.85em;">
+                        👥 ${vecinosCount} ${vecinosCount === 1 ? 'peer' : 'peers'}
+                    </span>
+                </td>
+                <td style="color:${statusClass === 'failing' ? 'var(--orange)' : 'var(--text-3)'}">${elapsedStr}</td>
                 <td>
                     <button class="btn btn-danger btn-sm" onclick="disconnectPeer('${escHtml(p.url)}', '${escHtml(p.id || '')}')" title="Desconectarse de este servidor">
                         🔌 Desconectar
@@ -411,6 +457,123 @@ async function disconnectNode() {
             btn.disabled = false;
             btn.textContent = "🔌 Desconectar mi Nodo";
         }
+    }
+}
+
+// ─── Búsqueda por Vecinos en las URLs ────────────────────────
+async function executeNeighborSearch() {
+    const input = $("neighbor-search-input");
+    const q = input ? input.value.trim() : "";
+    if (!q) {
+        showToast("Ingresa un término para buscar", "info");
+        return;
+    }
+
+    const container = $("neighbor-search-results");
+    const tbody = $("neighbor-search-tbody");
+    if (container) container.style.display = "block";
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">🔍 Consultando en vivo a través de la red de vecinos...</td></tr>';
+
+    try {
+        const resp = await fetch(`/api/search-neighbors?q=${encodeURIComponent(q)}`);
+        if (!resp.ok) throw new Error("Error en la búsqueda distribuida");
+        const data = await resp.json();
+        const results = data.results || [];
+
+        if (results.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="empty-cell">No se encontró ningún nodo o URL con "${escHtml(q)}" en tus vecinos conocidos.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = results.map(r => {
+            const role = (r.role || "worker").toLowerCase();
+            const roleClass = role === "leader" ? "badge-role-leader" 
+                            : role === "candidate" ? "badge-role-candidate" 
+                            : role === "follower" ? "badge-role-follower" 
+                            : "badge-role-worker";
+            const isConnected = (r.status === "ACTIVO" || r.status === "CONECTADO");
+
+            return `
+                <tr>
+                    <td><span class="status-dot ${isConnected ? "active" : "fallen"}">${r.status || "ACTIVO"}</span></td>
+                    <td style="font-weight:600">${escHtml(r.name)}</td>
+                    <td><span class="url-cell" title="${escHtml(r.url)}">${escHtml(r.url)}</span></td>
+                    <td><span class="badge ${roleClass}">${role.toUpperCase()}</span></td>
+                    <td style="font-size:0.8rem; color:var(--text-2);">${escHtml(r.source)} ${r.hops ? `(Salto: ${r.hops})` : ""}</td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="quickFillConnect('${escHtml(r.url)}', '${escHtml(r.name)}')">
+                            ⚡ Enlazar
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join("");
+
+        showToast(`Búsqueda completada: ${results.length} resultado(s)`, "success");
+    } catch (err) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty-cell" style="color:var(--red);">❌ Error buscando en vecinos: ${escHtml(err.message)}</td></tr>`;
+    }
+}
+
+function clearNeighborSearch() {
+    const input = $("neighbor-search-input");
+    const container = $("neighbor-search-results");
+    if (input) input.value = "";
+    if (container) container.style.display = "none";
+}
+
+function quickFillConnect(url, id) {
+    openConnectModal();
+    const urlInput = $("peer-connect-url");
+    if (urlInput) urlInput.value = url;
+}
+
+// ─── Explorar Vecinos de una URL en el Modal ─────────────────
+async function discoverNeighborsOfInput() {
+    const urlInput = $("peer-connect-url");
+    const url = urlInput ? urlInput.value.trim() : "";
+    if (!url) return alert("Por favor ingresa la URL que deseas explorar");
+
+    const box = $("discovered-neighbors-box");
+    if (box) {
+        box.style.display = "block";
+        box.innerHTML = '<div style="color:var(--cyan);">⏳ Consultando a la URL remota y descubriendo sus vecinos...</div>';
+    }
+
+    try {
+        const resp = await fetch("/api/discover-neighbors", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "No se pudo consultar el nodo remoto");
+
+        const allDiscovered = [...(data.peers || []), ...(data.workers || [])];
+        if (allDiscovered.length === 0) {
+            box.innerHTML = `<div>✅ Conexión exitosa a la URL, pero ese nodo aún no tiene vecinos reportados.</div>`;
+            return;
+        }
+
+        let html = `<div style="margin-bottom:6px; font-weight:600; color:var(--text-1);">🌐 Vecinos descubiertos en ${escHtml(data.seedUrl)} (${allDiscovered.length}):</div>`;
+        html += `<div style="max-height:140px; overflow-y:auto; display:flex; flex-direction:column; gap:4px;">`;
+        allDiscovered.forEach(item => {
+            const label = item.id || item.name || item.url;
+            const itemUrl = item.url;
+            html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.04); padding:4px 8px; border-radius:4px;">
+                    <div>
+                        <span style="font-weight:600; color:var(--cyan);">${escHtml(label)}</span>
+                        <span style="color:var(--text-3); font-size:0.75rem; margin-left:6px;">${escHtml(itemUrl)}</span>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:11px;" onclick="$('peer-connect-url').value='${escHtml(itemUrl)}'; showToast('URL copiada', 'info');">Usar</button>
+                </div>
+            `;
+        });
+        html += `</div>`;
+        box.innerHTML = html;
+    } catch (err) {
+        if (box) box.innerHTML = `<div style="color:var(--red);">❌ ${escHtml(err.message)}</div>`;
     }
 }
 

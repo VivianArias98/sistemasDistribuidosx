@@ -33,43 +33,82 @@ router.post("/election/ping", (req, res) => {
     if (faults.paused) return res.status(503).json({ error: "Nodo pausado" });
     if (engine.selfId === "UNCONFIGURED") return res.status(503).json({ error: "Nodo no configurado" });
 
-    const { id, url, peers: remotePeers = [] } = req.body;
+    const body = req.body || {};
+    const logger = require("../utils/logger");
+
+    // ── Compatibilidad con múltiples formatos de gossip (distintas implementaciones) ──
+    // Formato A (propio):      { id, url, peers }
+    // Formato B (Juan Diego):  { from: {id, url, role, currentLeader, term}, peers }
+    // Formato C (otros):       { nodeId, baseUrl, ... }
+    const fromObj = body.from || {};
+    const id  = body.id  || fromObj.id  || body.nodeId  || body.selfId  || body.name  || null;
+    const url = body.url || fromObj.url || body.baseUrl || body.selfUrl || body.address || null;
+    const remotePeers = body.peers || body.knownPeers || body.neighbors || [];
+
+    // Log de todo lo que llega para diagnosticar incompatibilidades
+    if (id || url) {
+        logger.info("PING-IN", `← Ping recibido de [${id || "?"}] @ ${url || "?"} con ${Array.isArray(remotePeers) ? remotePeers.length : 0} peers`);
+    }
 
     // Filtrar IDs numéricos y URLs para que los workers/puertos fantasma no entren a la lista de peers del cluster
-    // Un ID válido debe ser texto corto (ej. "A", "B", "Nodo1") y no ser una URL.
     const isValidPeer = (peerId) => {
         if (!peerId) return false;
-        if (typeof peerId === "object") return false; // Bloquea objetos puros
-        if (String(peerId) === "[object Object]") return false; // Bloquea objetos stringificados
-        if (!isNaN(Number(peerId))) return false; // Bloquea 3000, 3002
-        if (String(peerId).startsWith("http")) return false; // Bloquea URLs
-        if (String(peerId).length > 20) return false; // Bloquea strings larguísimos basura
+        if (typeof peerId === "object") return false;
+        if (String(peerId) === "[object Object]") return false;
+        if (!isNaN(Number(peerId))) return false;
+        if (String(peerId).startsWith("http")) return false;
+        if (String(peerId).length > 40) return false; // relajado de 20 a 40 por si usan nombres más largos
         return true;
     };
 
     // Descubrimiento transitivo: incorporar peers del emisor
     if (url && isValidPeer(id)) {
+        const alreadyKnown = engine.knownPeers().some(p => p.url === url.replace(/\/$/, ""));
         engine.upsertPeer(id, url);
-        // Auto-registrar en Naming Service para que aparezca en "Quién se conecta a mi servidor"
-        try {
-            const ip = registry.clientIp(req);
-            if (registry.resolve(id)) {
-                registry.pulse(id);
-            } else {
-                registry.register(id, url, ip, { platform: "coordinador-peer", hostname: id });
+        // Auto-registrar en Naming Service SOLO si NO es el propio nodo
+        const isSelf = (engine.selfId && id === engine.selfId) || (engine.selfUrl && url.replace(/\/$/, "") === engine.selfUrl.replace(/\/$/, ""));
+        if (!isSelf) {
+            if (!alreadyKnown) {
+                logger.info("PING", `✅ Nuevo peer conectado: [${id}] en ${url} (IP: ${registry.clientIp(req)})`);
             }
-        } catch (_) {
-            try { registry.pulse(id); } catch (__) {}
+            try {
+                const ip = registry.clientIp(req);
+                if (registry.resolve(id)) {
+                    registry.pulse(id);
+                } else {
+                    registry.register(id, url, ip, { platform: body.platform || "coordinador-peer", hostname: id });
+                    logger.info("REGISTRY", `📝 Peer registrado en Naming Service: [${id}] @ ${url}`);
+                }
+            } catch (_) {
+                try { registry.pulse(id); } catch (__) {}
+            }
         }
+    } else if (!id && !url) {
+        // El peer no mandó ni ID ni URL reconocibles — loguear el body crudo para diagnóstico
+        logger.warn("PING", `⚠️ Ping recibido sin ID/URL reconocibles. Body keys: ${Object.keys(body).join(", ")}`);
     }
     
-    for (const p of remotePeers) {
-        if (p.url && p.url !== engine.selfUrl && isValidPeer(p.id)) {
-            engine.upsertPeer(p.id, p.url);
+    for (const p of (Array.isArray(remotePeers) ? remotePeers : [])) {
+        const pId  = p.id  || p.nodeId  || p.selfId  || p.name  || null;
+        const pUrl = p.url || p.baseUrl || p.selfUrl || p.address || null;
+        if (pUrl && pUrl !== engine.selfUrl && isValidPeer(pId)) {
+            const alreadyKnown = engine.knownPeers().some(peer => peer.url === pUrl.replace(/\/$/, ""));
+            engine.upsertPeer(pId, pUrl);
+            if (!alreadyKnown) {
+                logger.info("PING", `🔗 Peer transitivo descubierto: [${pId}] en ${pUrl}`);
+            }
         }
     }
 
-    res.json(engine.snapshot());
+    // Respuesta compatible con ambos formatos (nuestro + Juan Diego):
+    const snap = engine.snapshot();
+    res.json({
+        ...snap,
+        ok: true,
+        from: { id: snap.id, url: snap.url, role: snap.role, currentLeader: snap.leader },
+        currentLeader: snap.leader,
+        currentTerm: snap.term,
+    });
 });
 
 // ─── GET /election/state ──────────────────────────────────────────────────────

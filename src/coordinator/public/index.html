@@ -172,13 +172,14 @@
                                         <th>Estado</th>
                                         <th>Nombre / ID</th>
                                         <th>URL de Origen</th>
+                                        <th>Rol</th>
                                         <th>Sin pulso</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="nodes-tbody">
                                     <tr>
-                                        <td colspan="5" class="empty-cell">Esperando que algún nodo o worker se conecte a tu servidor...</td>
+                                        <td colspan="6" class="empty-cell">Esperando que algún nodo o worker se conecte a tu servidor...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -230,19 +231,66 @@
                                         <th>ID Servidor</th>
                                         <th>URL Remota</th>
                                         <th>Rol en Clúster</th>
+                                        <th>Vecinos</th>
                                         <th>Último Contacto</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="peers-tbody">
                                     <tr>
-                                        <td colspan="6" class="empty-cell">No te has conectado a ningún servidor externo aún. Haz clic en "⚡ Conectar a Otro".</td>
+                                        <td colspan="7" class="empty-cell">No te has conectado a ningún servidor externo aún. Haz clic en "⚡ Conectar a Otro".</td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
                     </section>
                 </div>
+
+                <!-- ============================================================== -->
+                <!-- SECCIÓN: BÚSQUEDA POR VECINOS EN LAS URLs                        -->
+                <!-- ============================================================== -->
+                <section class="card full-width-card" id="section-neighbor-search" style="margin-top: 0.5rem;">
+                    <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                        <div>
+                            <div class="card-title">
+                                <span class="card-icon">🔍</span>
+                                <span>Búsqueda Distribuida por Vecinos en las URLs</span>
+                                <span class="badge badge-info" id="search-peers-badge">Buscador P2P</span>
+                            </div>
+                            <div class="card-subtitle">
+                                Resuelve nombres y localiza URLs consultando de forma transitiva a todos los coordinadores vecinos conectados.
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top: 0.5rem;">
+                        <input type="text" id="neighbor-search-input" class="input" style="flex:1; min-width:250px;" placeholder="Ingresa Nombre, ID o URL a buscar en la red de vecinos (ej: Vivian, E, Coordinador-1...)" onkeydown="if(event.key==='Enter') executeNeighborSearch()">
+                        <button class="btn btn-primary btn-sm" onclick="executeNeighborSearch()">
+                            🔍 Buscar en Vecinos
+                        </button>
+                        <button class="btn btn-ghost btn-sm" onclick="clearNeighborSearch()">
+                            ✕ Limpiar
+                        </button>
+                    </div>
+
+                    <div id="neighbor-search-results" style="display:none; margin-top: 0.85rem;">
+                        <div class="table-wrap">
+                            <table class="nodes-table">
+                                <thead>
+                                    <tr>
+                                        <th>Estado</th>
+                                        <th>Nombre / ID</th>
+                                        <th>URL Encontrada</th>
+                                        <th>Rol</th>
+                                        <th>Ubicación / Salto</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="neighbor-search-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
 
                 <!-- ============================================================== -->
                 <!-- SECCIÓN COMÚN: OBSERVABILIDAD EN VIVO (Abajo)                    -->
@@ -280,10 +328,14 @@
                 <label class="form-label">Tu ID (con el que te identificarás)</label>
                 <input type="text" id="my-node-id" class="input" placeholder="ej. Coordinador-1 o TuNombre">
             </div>
-            <div class="form-group" style="margin-bottom: 1rem;">
+            <div class="form-group" style="margin-bottom: 0.6rem;">
                 <label class="form-label">URL del compañero</label>
                 <input type="url" id="peer-connect-url" class="input" placeholder="https://link-companero.ngrok-free.dev">
             </div>
+            <button type="button" class="btn btn-ghost btn-sm full-width" style="margin-bottom:0.85rem;" onclick="discoverNeighborsOfInput()">
+                🔍 Explorar Vecinos de esta URL
+            </button>
+            <div id="discovered-neighbors-box" style="display:none; font-size:0.82rem; margin-bottom:0.85rem; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px;"></div>
             <div style="display:flex; gap:0.5rem;">
                 <button class="btn btn-ghost full-width" onclick="closeConnectModal()">Cancelar</button>
                 <button class="btn btn-primary full-width" onclick="submitConnect()">⚡ Conectar</button>
