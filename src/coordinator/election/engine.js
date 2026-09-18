@@ -400,7 +400,8 @@ async function _tick() {
                 err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND';
 
             if (peer.alive && (isHardFailure || elapsed > engine.timing.suspect)) {
-                peers.set(url, { ...peer, alive: false });
+                // En lugar de poner alive: false, eliminamos el peer inmediatamente
+                peers.delete(url);
 
                 if (isHardFailure) {
                     logger.timeout(engine.selfId, `Peer CAÍDO INSTANTÁNEAMENTE (Fallo de Red/Ngrok apagado): ${peer.id} (${url})`);
@@ -409,24 +410,17 @@ async function _tick() {
                 }
 
                 events.emit("peer-down", { id: peer.id, url });
+                events.emit("peer-removed", { id: peer.id, url });
 
                 // Si el peer caído era el líder, disparar elección
                 const currentLeader = role === "leader" ? engine.selfId : leaderId;
                 if (peer.id === currentLeader || url === leaderUrl) {
-                    logger.election(engine.selfId, `Líder ${peer.id} caído → iniciando elección`);
+                    logger.election(engine.selfId, `Noto que el líder cayó (${peer.id}) -> a todos los de ID mayor (iniciando elección)`);
                     events.emit("leader-lost", { leaderId: peer.id, leader: peer.id });
                     leaderId = null;
                     leaderUrl = null;
                     strategy.startElection().catch(() => { });
                 }
-            }
-
-            // Si pasan más de 20 segundos sin respuesta, eliminamos el peer fantasma automáticamente de la tabla de Salientes
-            if (elapsed > 20000) {
-                peers.delete(url);
-                logger.info(engine.selfId, `Peer ELIMINADO automáticamente tras >20s sin respuesta: ${peer.id} (${url})`);
-                // También emitimos un evento por si alguna estrategia necesita saber que el peer desapareció por completo
-                events.emit("peer-removed", { id: peer.id, url });
             }
         }
     }

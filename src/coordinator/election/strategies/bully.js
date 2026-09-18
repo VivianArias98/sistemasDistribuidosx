@@ -90,7 +90,7 @@ class BullyStrategy extends ElectionStrategy {
 
         } else if (type === "ANSWER") {
             // Alguien mayor que yo está vivo → el retador se calla y espera
-            logger.election(e.selfId, `ANSWER recibido de ${from.id} — me callo y espero`);
+            logger.election(e.selfId, `ANSWER recibido de ${from.id} (Alguien mayor que yo está vivo) — El retador se calla y espera`);
             clearTimeout(this._electionTimer);
             e.role = "follower";
             res.json({ ok: true });
@@ -98,7 +98,7 @@ class BullyStrategy extends ElectionStrategy {
         } else if (type === "COORDINATOR") {
             // Si recibo un COORDINATOR de alguien menor que yo → no lo acepto, convoco elección (soy el matón)
             if (isHigher(e.selfId, from.id) && e.role !== "follower") {
-                logger.election(e.selfId, `COORDINATOR de ${from.id} rechazado — tengo mayor ID, convocando elección`);
+                logger.election(e.selfId, `COORDINATOR de ${from.id} rechazado (menor que yo) — no lo acepto, convoco elección (soy el matón)`);
                 res.json({ ok: true });
                 setImmediate(() => this.startElection());
             } else {
@@ -108,7 +108,7 @@ class BullyStrategy extends ElectionStrategy {
                 e.leaderId  = from.id;
                 e.leaderUrl = from.url;
                 e.term = payload?.term ?? e.term;
-                logger.leader(e.selfId, `Nuevo líder aceptado: ${from.id} (${from.url})`);
+                logger.leader(e.selfId, `Aceptan al nuevo líder: ${from.id} (${from.url})`);
                 events.emit("leader-accepted", { leader: from.id, leaderUrl: from.url, term: e.term });
                 res.json({ ok: true });
             }
@@ -144,7 +144,7 @@ class BullyStrategy extends ElectionStrategy {
         e.role      = "leader";
         e.leaderId  = e.selfId;
         e.leaderUrl = e.selfUrl;
-        logger.leader(e.selfId, `👑 Me proclamo LÍDER — Término ${e.term}`);
+        logger.leader(e.selfId, `👑 Me proclamo líder (no respondió nadie de ID mayor) -> a todos — Término ${e.term}`);
         events.emit("election-won", { leader: e.selfId, leaderUrl: e.selfUrl, term: e.term });
 
         // Broadcast COORDINATOR a todos los peers

@@ -18,13 +18,13 @@ const ensureLeader = (req, res, next) => {
     if (engine.role === "leader") return next();
 
     // 2. Si no soy líder, preparo la respuesta con el líder actual y los peers
-    const peers = engine.knownPeers().map(p => ({ id: p.id, url: p.url, alive: Boolean(p.alive) }));
+    // La diapositiva indica que 'peers' debe ser un arreglo de strings (URLs)
+    const peers = engine.knownPeers().map(p => p.url);
 
     if (engine.leaderUrl) {
-        // Sé quién es el líder → 409 (Redirección con nombre del líder y URL)
+        // Sé quién es el líder → 409 (Redirección con URL del líder)
         return res.status(409).json({ 
-            leader: engine.leaderId,
-            leaderUrl: engine.leaderUrl, 
+            leader: engine.leaderUrl,
             peers 
         });
     } else {
@@ -359,7 +359,15 @@ router.post("/unregister/:name", (req, res) => {
 router.post(["/heartbeat/:name", "/pulse/:name"], ensureLeader, (req, res) => {
     const w = registry.pulse(req.params.name);
     if (!w) return res.status(404).json({ error: `Worker '${req.params.name}' no registrado`, mustRegister: true });
-    res.json({ message: "Pulso recibido", status: "ACTIVO", lastHeartbeat: w.lastHeartbeat });
+    
+    // Adjuntar la vista del clúster (Fase 4 y 5)
+    res.json({ 
+        message: "Pulse received", 
+        leader: engine.selfUrl,
+        peers: engine.knownPeers().map(p => p.url),
+        status: "ACTIVO", 
+        lastHeartbeat: w.lastHeartbeat 
+    });
 });
 
 // ─── MENSAJERÍA ───────────────────────────────────────────────────────────────
