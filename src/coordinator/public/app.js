@@ -305,7 +305,10 @@ function renderPeers(peers, cluster) {
         return `
             <tr>
                 <td><span class="status-dot ${statusClass}" ${statusClass==='failing' ? 'style="color: var(--orange);"' : ''}>${statusText}</span></td>
-                <td style="font-weight:600; color:var(--text-1);">${escHtml(p.id || "?")}</td>
+                <td>
+                    <div style="font-weight:600; color:var(--text-1);">${escHtml(p.id || "?")}</div>
+                    ${p.discoveredVia ? `<div style="font-size: 0.75em; color: var(--text-3); margin-top: 2px;">🔗 Conocido vía <strong>${escHtml(p.discoveredVia)}</strong></div>` : ''}
+                </td>
                 <td><span class="url-cell" title="${escHtml(p.url)}">${escHtml(p.url)}</span></td>
                 <td><span class="badge ${roleClass}">${role.toUpperCase()}</span></td>
                 <td style="color:var(--text-2); font-weight: 500;">

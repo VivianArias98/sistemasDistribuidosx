@@ -103,6 +103,7 @@ const engine = {
             url: cleanUrl,
             alive: true,
             lastSeen: Date.now(),
+            discoveredVia: existing.discoveredVia || (extraData ? extraData.discoveredVia : null) || null,
             ...extraData,
         });
 
@@ -350,8 +351,8 @@ async function _tick() {
                     const cleanPUrl = p.url ? p.url.replace(/\/$/, "") : null;
                     if (cleanPUrl && cleanPUrl !== cleanSelf && isValidPeer(p.id)) {
                         if (!peers.has(cleanPUrl)) {
-                            engine.upsertPeer(p.id, cleanPUrl);
-                            logger.gossip(engine.selfId, `Nuevo peer descubierto transitivamente: ${p.id} (${cleanPUrl})`);
+                            engine.upsertPeer(p.id, cleanPUrl, { discoveredVia: resolvedId });
+                            logger.gossip(engine.selfId, `Nuevo peer descubierto transitivamente: ${p.id} (${cleanPUrl}) vía ${resolvedId}`);
                         } else if (p.id && p.id !== cleanPUrl) {
                             // Actualizar ID si antes teníamos la URL como ID
                             const existing = peers.get(cleanPUrl);

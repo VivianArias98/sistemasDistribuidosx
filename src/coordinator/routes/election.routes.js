@@ -93,9 +93,9 @@ router.post("/election/ping", (req, res) => {
         const pUrl = p.url || p.baseUrl || p.selfUrl || p.address || null;
         if (pUrl && pUrl !== engine.selfUrl && isValidPeer(pId)) {
             const alreadyKnown = engine.knownPeers().some(peer => peer.url === pUrl.replace(/\/$/, ""));
-            engine.upsertPeer(pId, pUrl);
+            engine.upsertPeer(pId, pUrl, { discoveredVia: id });
             if (!alreadyKnown) {
-                logger.info("PING", `🔗 Peer transitivo descubierto: [${pId}] en ${pUrl}`);
+                logger.info("PING", `🔗 Peer transitivo descubierto: [${pId}] en ${pUrl} vía ${id}`);
             }
         }
     }
