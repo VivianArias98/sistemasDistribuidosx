@@ -9,19 +9,19 @@
  *  - Detectar caídas (suspect timeout) y disparar elecciones
  *  - Delegar la lógica de elección a la estrategia activa (bully, ring, etc.)
  */
-const config    = require("../config");
-const faults    = require("./faults");
+const config = require("../config");
+const faults = require("./faults");
 const transport = require("./transport");
-const events    = require("./events");
+const events = require("./events");
 const strategies = require("./strategies");
-const logger    = require("../utils/logger");
+const logger = require("../utils/logger");
 
 // ─── Estado del nodo ──────────────────────────────────────────────────────────
 
 /** @type {"follower"|"candidate"|"leader"} */
-let role      = "follower";
-let term      = 0;
-let leaderId  = null;
+let role = "follower";
+let term = 0;
+let leaderId = null;
 let leaderUrl = null;
 
 /**
@@ -37,21 +37,22 @@ let strategy = null;
 // ─── API pública (expuesta como "engine") ─────────────────────────────────────
 
 const engine = {
-    get selfId()    { return config.nodeId; },
-    get selfUrl()   { return config.baseUrl; },
-    get timing()    { return config.timing; },
+    get selfId() { return config.nodeId; },
+    get selfUrl() { return config.baseUrl; },
+    get timing() { return config.timing; },
 
-    get role()      { return role; },
-    set role(v)     { role = v; },
+    get role() { return role; },
+    set role(v) { role = v; },
 
-    get term()      { return term; },
-    set term(v)     { term = v; },
+    get term() { return term; },
+    set term(v) { term = v; },
 
-    get leaderId()  { return leaderId; },
+    get leaderId() { return leaderId; },
     set leaderId(v) { leaderId = v; },
 
     get leaderUrl() { return leaderUrl; },
-    set leaderUrl(v){ leaderUrl = v; },
+    set leaderUrl(v) { leaderUrl = v; },
+    //jnd
 
     /**
      * Retorna array de peers vivos/conocidos como [{id, url, alive, lastSeen}]
@@ -95,19 +96,19 @@ const engine = {
 
         const existing = peers.get(cleanUrl) || {};
         const oldId = existing.id;
-        
+
         peers.set(cleanUrl, {
             ...existing,
-            id:       id || existing.id || cleanUrl,
-            url:      cleanUrl,
-            alive:    true,
+            id: id || existing.id || cleanUrl,
+            url: cleanUrl,
+            alive: true,
             lastSeen: Date.now(),
             ...extraData,
         });
 
         if (oldId && id && oldId !== id && oldId !== cleanUrl) {
             logger.warn(engine.selfId, `Peer renombrado en ${cleanUrl}: era '${oldId}', ahora es '${id}'`);
-            
+
             // Si el peer que se acaba de renombrar era nuestro líder reconocido, actualizamos el tracker de líder
             if (engine.leaderId === oldId) {
                 engine.leaderId = id;
@@ -134,14 +135,14 @@ const engine = {
         const currentLeaderUrl = isLeader ? engine.selfUrl : (leaderUrl || null);
 
         const snap = {
-            id:        engine.selfId,
-            url:       engine.selfUrl,
-            role:      role,
-            leader:    currentLeader,
+            id: engine.selfId,
+            url: engine.selfUrl,
+            role: role,
+            leader: currentLeader,
             leaderUrl: currentLeaderUrl,
-            peers:     engine.knownPeers().map(p => ({
-                id:    p.id,
-                url:   p.url,
+            peers: engine.knownPeers().map(p => ({
+                id: p.id,
+                url: p.url,
                 alive: Boolean(p.alive),
             })),
         };
@@ -179,24 +180,24 @@ const engine = {
         if (!cleanUrl) return false;
         disconnectedPeers.add(cleanUrl);
         let removed = false;
-        
+
         if (peers.has(cleanUrl)) {
             const peerData = peers.get(cleanUrl);
             const peerId = peerData ? peerData.id : null;
-            
+
             peers.delete(cleanUrl);
             logger.info(engine.selfId, `Peer desconectado manualmente: ${cleanUrl}`);
             events.emit("cluster-update", { action: "peer-removed", url: cleanUrl });
             removed = true;
-            
+
             // Si el peer que estamos desconectando era nuestro líder actual, debemos iniciar una elección
             const currentLeader = role === "leader" ? engine.selfId : leaderId;
             if ((peerId && peerId === currentLeader) || cleanUrl === leaderUrl) {
                 logger.election(engine.selfId, `Líder ${peerId || cleanUrl} desconectado manualmente → iniciando elección`);
                 events.emit("leader-lost", { leaderId: peerId, leader: peerId });
-                leaderId  = null;
+                leaderId = null;
                 leaderUrl = null;
-                role      = "candidate";
+                role = "candidate";
                 if (strategy && strategy.startElection) {
                     strategy.startElection();
                 }
@@ -216,7 +217,7 @@ const engine = {
             for (const peer of peers.values()) {
                 transport.post(`${peer.url}/election/algorithm`, {
                     algo: name, propagate: false
-                }, { timeout: engine.timing.rpcTimeout }).catch(() => {});
+                }, { timeout: engine.timing.rpcTimeout }).catch(() => { });
             }
         }
     },
@@ -226,7 +227,7 @@ const engine = {
      */
     async triggerElection() {
         role = "follower";
-        leaderId  = null;
+        leaderId = null;
         leaderUrl = null;
         events.emit("leader-lost", { from: engine.selfId });
         await strategy.startElection();
@@ -237,7 +238,7 @@ const engine = {
      */
     async handleElectionMessage(msg, res) {
         if (faults.paused) return res.status(503).json({ error: "Nodo pausado (chaos)" });
-        
+
         // Evitar que workers participen en la elección
         const senderId = msg?.from?.id;
         if (senderId && !isNaN(Number(senderId))) {
@@ -252,7 +253,7 @@ const engine = {
         const senderUrl = msg?.from?.url ? msg.from.url.replace(/\/$/, "") : null;
         const isSelfRemote = cleanSelf && !cleanSelf.includes("localhost") && !cleanSelf.includes("127.0.0.1");
         const isTargetLocal = senderUrl && (senderUrl.includes("localhost") || senderUrl.includes("127.0.0.1"));
-        
+
         if (isSelfRemote && isTargetLocal) {
             logger.warn(engine.selfId, `Ignorando mensaje de elección de ${senderId} por URL local inválida (${senderUrl}) en entorno remoto`);
             return res.status(400).json({ error: "No se admiten URLs locales en entorno remoto" });
@@ -329,15 +330,15 @@ async function _tick() {
                         {},
                         { timeout: engine.timing.rpcTimeout }
                     );
-                }).catch(() => {});
+                }).catch(() => { });
             }
 
             // Actualizar el ID real del peer desde su respuesta
             const resolvedId = data.id || peer.id || url;
             peers.set(url, {
                 ...peer,
-                id:       resolvedId,
-                alive:    true,
+                id: resolvedId,
+                alive: true,
                 lastSeen: now,
                 snapshot: data,
             });
@@ -385,20 +386,20 @@ async function _tick() {
 
         } catch (err) {
             const elapsed = now - (peer.lastSeen || now);
-            
+
             // Detectar fallos duros instantáneos (ej: ngrok apagado = 502 Bad Gateway / 504, o servidor local apagado = ECONNREFUSED)
             const isHardFailure = err.response && (err.response.status === 502 || err.response.status === 504 || err.response.status === 404) ||
-                                  err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND';
+                err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND';
 
             if (peer.alive && (isHardFailure || elapsed > engine.timing.suspect)) {
                 peers.set(url, { ...peer, alive: false });
-                
+
                 if (isHardFailure) {
                     logger.timeout(engine.selfId, `Peer CAÍDO INSTANTÁNEAMENTE (Fallo de Red/Ngrok apagado): ${peer.id} (${url})`);
                 } else {
                     logger.timeout(engine.selfId, `Peer CAÍDO (${elapsed}ms sin respuesta): ${peer.id} (${url})`);
                 }
-                
+
                 events.emit("peer-down", { id: peer.id, url });
 
                 // Si el peer caído era el líder, disparar elección
@@ -406,17 +407,25 @@ async function _tick() {
                 if (peer.id === currentLeader || url === leaderUrl) {
                     logger.election(engine.selfId, `Líder ${peer.id} caído → iniciando elección`);
                     events.emit("leader-lost", { leaderId: peer.id, leader: peer.id });
-                    leaderId  = null;
+                    leaderId = null;
                     leaderUrl = null;
-                    strategy.startElection().catch(() => {});
+                    strategy.startElection().catch(() => { });
                 }
+            }
+
+            // Si pasan más de 20 segundos sin respuesta, eliminamos el peer fantasma automáticamente de la tabla de Salientes
+            if (elapsed > 20000) {
+                peers.delete(url);
+                logger.info(engine.selfId, `Peer ELIMINADO automáticamente tras >20s sin respuesta: ${peer.id} (${url})`);
+                // También emitimos un evento por si alguna estrategia necesita saber que el peer desapareció por completo
+                events.emit("peer-removed", { id: peer.id, url });
             }
         }
     }
 
     // — Tick del líder (reafirmación periódica via estrategia) —
     if (role === "leader") {
-        strategy.leaderTick().catch(() => {});
+        strategy.leaderTick().catch(() => { });
     }
 }
 
@@ -425,7 +434,7 @@ async function _tick() {
  */
 function start() {
     if (_loopHandle) return;
-    _loopHandle = setInterval(() => _tick().catch(() => {}), engine.timing.heartbeat);
+    _loopHandle = setInterval(() => _tick().catch(() => { }), engine.timing.heartbeat);
     logger.info(engine.selfId, `Engine iniciado — Preset: ${config.timingPreset}, heartbeat: ${engine.timing.heartbeat}ms`);
 }
 
@@ -458,7 +467,7 @@ async function init(algoName = "bully") {
         // Si no hay líder conocido, iniciar elección
         if (!leaderId) {
             logger.election(engine.selfId, "Sin líder conocido al arrancar → iniciando elección");
-            strategy.startElection().catch(() => {});
+            strategy.startElection().catch(() => { });
         }
     }, engine.timing.heartbeat * 2);
 }
