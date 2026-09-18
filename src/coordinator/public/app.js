@@ -238,8 +238,65 @@ async function loadCluster() {
         const data = await r.json();
         allPeers = data.peers || [];
         renderPeers(allPeers, data.cluster);
+        renderTopologyMap(allPeers);
         updateMessageDropdown();
     } catch {}
+}
+
+function renderTopologyMap(peers) {
+    const container = $("topology-map-container");
+    if (!container) return;
+
+    if (peers.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-3); padding: 1rem;">No hay coordinadores conectados en la red P2P.</div>';
+        return;
+    }
+
+    let html = '';
+    peers.forEach(p => {
+        const neighbors = (p.snapshot && Array.isArray(p.snapshot.peers)) ? p.snapshot.peers : [];
+        const isFailing = !p.alive || (Date.now() - p.lastSeen >= 3000);
+        
+        html += `
+            <div style="background: var(--bg-surface-2); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                    <div>
+                        <span class="status-dot ${isFailing ? 'fallen' : 'active'}"></span>
+                        <strong style="color: var(--text-1); font-size: 1.1rem;">${escHtml(p.id || "?")}</strong>
+                    </div>
+                    <div style="color: var(--text-2); font-family: monospace; font-size: 0.85rem;">
+                        ${escHtml(p.url)}
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-3); margin-bottom: 0.5rem;">Vecinos reportados: ${neighbors.length}</div>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        ${neighbors.length === 0 ? '<em style="color: var(--text-3); font-size: 0.85rem;">Sin vecinos</em>' : neighbors.map(n => {
+                            const nId = n.id || n.name || "?";
+                            const nUrl = n.url || n.baseUrl || n.address || "";
+                            
+                            // Verificar si ya estamos conectados a este vecino directamente
+                            const isConnectedDirectly = peers.some(myP => myP.url === nUrl) || (myP => myP.id === nId);
+                            
+                            return `
+                                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 0.4rem 0.8rem; border-radius: 4px;">
+                                    <div>
+                                        <strong style="color: var(--cyan); font-size: 0.9rem;">${escHtml(nId)}</strong>
+                                        <span style="color: var(--text-3); font-size: 0.75rem; margin-left: 0.5rem;">${escHtml(nUrl)}</span>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="connectToPeer('${escHtml(nUrl)}')">
+                                        ⚡ Conectar
+                                    </button>
+                                </div>
+                            `;
+                        }).join("")}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
 }
 
 function updateMessageDropdown() {
@@ -347,6 +404,41 @@ async function disconnectPeer(url, id) {
         }
     } catch (err) {
         showToast("Error al desconectar: " + err.message, "error");
+    }
+}
+
+// ─── Conectar a un Peer desde el Mapa de Topología ──────────────────────────
+async function connectToPeer(url) {
+    try {
+        showToast("Conectando a " + url + "...", "info");
+        const stateRes = await fetch('/election/state');
+        if (!stateRes.ok) throw new Error("No se pudo obtener el estado local");
+        const state = await stateRes.json();
+        
+        if (!state.id || state.id === 'UNCONFIGURED') {
+            alert("Primero debes configurar tu propio ID haciendo clic en 'Conectar a Otro'.");
+            return;
+        }
+
+        const res = await fetch('/api/setup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                nodeId: state.id, 
+                baseUrl: state.url, 
+                peerUrl: url 
+            })
+        });
+        
+        if (res.ok) {
+            showToast(`¡Conectado exitosamente a ${url}!`, "success");
+            await loadAll();
+        } else {
+            const data = await res.json();
+            showToast(`Error al conectar: ${data.error || "Desconocido"}`, "error");
+        }
+    } catch (err) {
+        showToast(`❌ Error: ${err.message}`, "error");
     }
 }
 

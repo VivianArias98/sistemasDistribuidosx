@@ -247,47 +247,26 @@
                 </div>
 
                 <!-- ============================================================== -->
-                <!-- SECCIÓN: BÚSQUEDA POR VECINOS EN LAS URLs                        -->
+                <!-- SECCIÓN: MAPA DE TOPOLOGÍA P2P                                   -->
                 <!-- ============================================================== -->
                 <section class="card full-width-card" id="section-neighbor-search" style="margin-top: 0.5rem;">
                     <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                         <div>
                             <div class="card-title">
-                                <span class="card-icon">🔍</span>
-                                <span>Búsqueda Distribuida por Vecinos en las URLs</span>
-                                <span class="badge badge-info" id="search-peers-badge">Buscador P2P</span>
+                                <span class="card-icon">🗺️</span>
+                                <span>Mapa de Topología P2P</span>
+                                <span class="badge badge-info" id="search-peers-badge">Red Transitiva</span>
                             </div>
                             <div class="card-subtitle">
-                                Resuelve nombres y localiza URLs consultando de forma transitiva a todos los coordinadores vecinos conectados.
+                                Visualiza a todos los coordinadores en la red y los vecinos que tienen a sus lados. Conéctate a ellos fácilmente.
                             </div>
                         </div>
                     </div>
-                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top: 0.5rem;">
-                        <input type="text" id="neighbor-search-input" class="input" style="flex:1; min-width:250px;" placeholder="Ingresa Nombre, ID o URL a buscar en la red de vecinos (ej: Vivian, E, Coordinador-1...)" onkeydown="if(event.key==='Enter') executeNeighborSearch()">
-                        <button class="btn btn-primary btn-sm" onclick="executeNeighborSearch()">
-                            🔍 Buscar en Vecinos
-                        </button>
-                        <button class="btn btn-ghost btn-sm" onclick="clearNeighborSearch()">
-                            ✕ Limpiar
-                        </button>
-                    </div>
-
-                    <div id="neighbor-search-results" style="display:none; margin-top: 0.85rem;">
-                        <div class="table-wrap">
-                            <table class="nodes-table">
-                                <thead>
-                                    <tr>
-                                        <th>Estado</th>
-                                        <th>Nombre / ID</th>
-                                        <th>URL Encontrada</th>
-                                        <th>Rol</th>
-                                        <th>Ubicación / Salto</th>
-                                        <th>Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="neighbor-search-tbody">
-                                </tbody>
-                            </table>
+                    
+                    <div id="topology-map-container" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+                        <!-- Aquí renderizaremos las tarjetas de cada nodo y sus vecinos -->
+                        <div style="text-align: center; color: var(--text-3); padding: 1rem;">
+                            Esperando datos de la red...
                         </div>
                     </div>
                 </section>

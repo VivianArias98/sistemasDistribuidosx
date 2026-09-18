@@ -348,16 +348,18 @@ async function _tick() {
             if (Array.isArray(data.peers)) {
                 const cleanSelf = engine.selfUrl ? engine.selfUrl.replace(/\/$/, "") : null;
                 for (const p of data.peers) {
-                    const cleanPUrl = p.url ? p.url.replace(/\/$/, "") : null;
-                    if (cleanPUrl && cleanPUrl !== cleanSelf && isValidPeer(p.id)) {
+                    const rawUrl = p.url || p.baseUrl || p.selfUrl || p.address || null;
+                    const pId = p.id || p.nodeId || p.selfId || p.name || null;
+                    const cleanPUrl = rawUrl ? rawUrl.replace(/\/$/, "") : null;
+                    if (cleanPUrl && cleanPUrl !== cleanSelf && isValidPeer(pId)) {
                         if (!peers.has(cleanPUrl)) {
-                            engine.upsertPeer(p.id, cleanPUrl, { discoveredVia: resolvedId });
-                            logger.gossip(engine.selfId, `Nuevo peer descubierto transitivamente: ${p.id} (${cleanPUrl}) vía ${resolvedId}`);
-                        } else if (p.id && p.id !== cleanPUrl) {
+                            engine.upsertPeer(pId, cleanPUrl, { discoveredVia: resolvedId });
+                            logger.gossip(engine.selfId, `Nuevo peer descubierto transitivamente: ${pId} (${cleanPUrl}) vía ${resolvedId}`);
+                        } else if (pId && pId !== cleanPUrl) {
                             // Actualizar ID si antes teníamos la URL como ID
                             const existing = peers.get(cleanPUrl);
                             if (existing && (!existing.id || existing.id === cleanPUrl)) {
-                                peers.set(cleanPUrl, { ...existing, id: p.id });
+                                peers.set(cleanPUrl, { ...existing, id: pId });
                             }
                         }
                     }
