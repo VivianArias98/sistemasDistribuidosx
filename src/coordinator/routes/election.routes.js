@@ -15,6 +15,7 @@ const { engine } = require("../election/engine");
 const eventsModule = require("../election/events");
 const strategies = require("../election/strategies");
 const faults    = require("../election/faults");
+const registry  = require("../services/registry");
 
 const router = express.Router();
 
@@ -47,7 +48,20 @@ router.post("/election/ping", (req, res) => {
     };
 
     // Descubrimiento transitivo: incorporar peers del emisor
-    if (url && isValidPeer(id)) engine.upsertPeer(id, url);
+    if (url && isValidPeer(id)) {
+        engine.upsertPeer(id, url);
+        // Auto-registrar en Naming Service para que aparezca en "Quién se conecta a mi servidor"
+        try {
+            const ip = registry.clientIp(req);
+            if (registry.resolve(id)) {
+                registry.pulse(id);
+            } else {
+                registry.register(id, url, ip, { platform: "coordinador-peer", hostname: id });
+            }
+        } catch (_) {
+            try { registry.pulse(id); } catch (__) {}
+        }
+    }
     
     for (const p of remotePeers) {
         if (p.url && p.url !== engine.selfUrl && isValidPeer(p.id)) {
@@ -60,15 +74,7 @@ router.post("/election/ping", (req, res) => {
 
 // ─── GET /election/state ──────────────────────────────────────────────────────
 router.get("/election/state", (req, res) => {
-    res.json({
-        id:        engine.selfId,
-        url:       engine.selfUrl,
-        role:      engine.role,
-        leader:    engine.leaderId,
-        leaderUrl: engine.leaderUrl,
-        peers:     engine.knownPeers().map(p => ({ id: p.id, url: p.url, alive: p.alive })),
-        
-    });
+    res.json(engine.snapshot());
 });
 
 // ─── GET /cluster — Estado agregado del cluster ───────────────────────────────
@@ -84,23 +90,25 @@ router.get("/cluster", (req, res) => {
     const splitBrain = uniqueLeaders.length > 1;
 
     // Convergencia: todos conocen al mismo líder
-    const allKnowSameLeader = snapshots.every(s => s.leaderId === engine.leaderId);
-    const converged = !splitBrain && allKnowSameLeader && !!engine.leaderId;
+    const currentLeader = engine.role === "leader" ? engine.selfId : engine.leaderId;
+    const allKnowSameLeader = snapshots.every(s => (s.leader || s.leaderId) === currentLeader);
+    const converged = !splitBrain && allKnowSameLeader && !!currentLeader;
 
     res.json({
         self: engine.snapshot(),
         peers: peers.map(p => ({
             id:       p.id,
             url:      p.url,
-            alive:    p.alive,
+            alive:    Boolean(p.alive),
             lastSeen: p.lastSeen,
             snapshot: p.snapshot,
         })),
         cluster: {
             totalNodes:    peers.length + 1,
             alivePeers:    peers.filter(p => p.alive).length,
-            leaderId:      engine.leaderId,
-            leaderUrl:     engine.leaderUrl,
+            leader:        currentLeader,
+            leaderId:      currentLeader,
+            leaderUrl:     engine.role === "leader" ? engine.selfUrl : engine.leaderUrl,
             term:          engine.term,
             splitBrain,
             converged,
@@ -146,16 +154,35 @@ router.post("/election/kill-leader", async (req, res) => {
     }
 });
 
-// ─── DELETE /election/peers — Eliminar peer manualmente ───────────────────────
+// ─── DELETE /election/peers — Desconectar y eliminar peer ─────────────────────
 router.delete("/election/peers", (req, res) => {
     const url = req.query.url;
     if (!url) return res.status(400).json({ error: "Falta el parámetro url" });
-    const removed = engine.removePeer(url);
-    if (removed) {
-        res.json({ ok: true, message: `Peer eliminado: ${url}` });
-    } else {
-        res.status(404).json({ error: "Peer no encontrado" });
+    const cleanUrl = url.replace(/\/$/, "");
+
+    // 1. Quitar del cluster y prevenir re-conexión automática
+    const removed = engine.removePeer(cleanUrl);
+
+    // 2. Quitar del Naming Service de workers si estaba registrado
+    try {
+        const id = req.query.id;
+        for (const w of registry.list()) {
+            if (w.url === cleanUrl || (id && w.name === id)) {
+                registry.unregister(w.name);
+            }
+        }
+    } catch (_) {}
+
+    // 3. Notificar al nodo remoto para que también nos desconecte (best-effort)
+    const transport = require("../election/transport");
+    if (engine.selfUrl) {
+        transport.del(`${cleanUrl}/election/peers?url=${encodeURIComponent(engine.selfUrl)}`, { timeout: 1500 }).catch(() => {});
     }
+    if (engine.selfId) {
+        transport.post(`${cleanUrl}/unregister/${encodeURIComponent(engine.selfId)}`, {}, { timeout: 1500 }).catch(() => {});
+    }
+
+    res.json({ ok: true, message: `Desconectado exitosamente de ${cleanUrl}`, removed });
 });
 
 // ─── GET /events — Server-Sent Events stream ──────────────────────────────────

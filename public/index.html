@@ -357,7 +357,11 @@
         <div class="modal-content">
             <div class="modal-title">Conectar a otro Coordinador</div>
             <div class="modal-desc">
-                Ingresa la URL pública (ej. ngrok) de tu compañero para unirte a su red.
+                Ingresa tu identificador y la URL pública (ej. ngrok) de tu compañero para unirte a su red.
+            </div>
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+                <label class="form-label">Tu ID (con el que te identificarás)</label>
+                <input type="text" id="my-node-id" class="input" placeholder="ej. Coordinador-1 o TuNombre">
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
                 <label class="form-label">URL del compañero</label>
@@ -372,28 +376,47 @@
 
     <script src="app.js"></script>
     <script>
-        function openConnectModal() {
+        async function openConnectModal() {
             document.getElementById('connect-modal').classList.add('active');
+            try {
+                const stateRes = await fetch('/election/state');
+                if (stateRes.ok) {
+                    const state = await stateRes.json();
+                    const idInput = document.getElementById('my-node-id');
+                    if (idInput && (!idInput.value || idInput.value === 'UNCONFIGURED') && state.id && state.id !== 'UNCONFIGURED') {
+                        idInput.value = state.id;
+                    }
+                }
+            } catch (e) {
+                // Fallback silencioso si falla la precarga
+            }
         }
         function closeConnectModal() {
             document.getElementById('connect-modal').classList.remove('active');
             document.getElementById('peer-connect-url').value = '';
         }
         async function submitConnect() {
+            const myId = document.getElementById('my-node-id').value.trim();
             const url = document.getElementById('peer-connect-url').value.trim();
-            if (!url) return alert('Por favor ingresa una URL válida');
+            
+            if (!url) return alert('Por favor ingresa una URL válida del compañero');
             
             try {
                 // Obtenemos la config actual
                 const stateRes = await fetch('/election/state');
                 const state = await stateRes.json();
                 
-                // Actualizamos enviando la nueva peerUrl
+                const finalNodeId = myId || state.id;
+                if (!finalNodeId || finalNodeId === 'UNCONFIGURED') {
+                    return alert('Por favor ingresa un ID con el que te identificarás');
+                }
+
+                // Actualizamos enviando la nueva peerUrl y el nodeId
                 const res = await fetch('/api/setup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        nodeId: state.id, 
+                        nodeId: finalNodeId, 
                         baseUrl: state.url, 
                         peerUrl: url 
                     })
@@ -401,7 +424,7 @@
                 
                 if (res.ok) {
                     closeConnectModal();
-                    alert('¡Conectado exitosamente! El nodo ha sido agregado.');
+                    alert(`¡Conectado exitosamente como "${finalNodeId}"! El nodo ha sido agregado.`);
                     // Recargar panel para ver cambios
                     setTimeout(() => window.location.reload(), 500);
                 } else {

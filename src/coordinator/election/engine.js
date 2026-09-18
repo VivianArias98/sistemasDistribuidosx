@@ -28,6 +28,7 @@ let leaderUrl = null;
  * Peers conocidos: Map<url, { id, url, alive, lastSeen, snapshot }>
  */
 const peers = new Map();
+const disconnectedPeers = new Set();
 
 // ─── Estrategia activa ────────────────────────────────────────────────────────
 
@@ -60,51 +61,100 @@ const engine = {
     },
 
     /**
+     * Permite explícitamente volver a conectar un peer previamente desconectado
+     */
+    allowPeer(url) {
+        if (url) disconnectedPeers.delete(url.replace(/\/$/, ""));
+    },
+
+    /**
      * Añade o actualiza un peer conocido.
      */
     upsertPeer(id, url, extraData = {}) {
-        const existing = peers.get(url);
-        peers.set(url, {
-            id:       id || (existing && existing.id) || url,
-            url,
+        const cleanUrl = url ? url.replace(/\/$/, "") : null;
+        if (!cleanUrl || disconnectedPeers.has(cleanUrl)) return;
+
+        const existing = peers.get(cleanUrl) || {};
+        peers.set(cleanUrl, {
+            ...existing,
+            id:       id || existing.id || cleanUrl,
+            url:      cleanUrl,
             alive:    true,
             lastSeen: Date.now(),
-            snapshot: null,
-            ...existing,
             ...extraData,
         });
     },
 
     /**
-     * Snapshot del estado actual para compartir vía gossip.
+     * Snapshot del estado actual para compartir vía gossip y endpoints.
+     * Cumple estrictamente con el formato JSON requerido:
+     * {
+     *   "id": "A",
+     *   "url": "http://192.168.1.42:3000",
+     *   "role": "leader", // "leader" | "follower" | "candidate"
+     *   "leader": "A",
+     *   "leaderUrl": "http://192.168.1.42:3000",
+     *   "peers": [ { "id": "B", "url": "...", "alive": true } ]
+     * }
      */
     snapshot() {
-        return {
+        const isLeader = role === "leader";
+        const currentLeader = isLeader ? engine.selfId : (leaderId || null);
+        const currentLeaderUrl = isLeader ? engine.selfUrl : (leaderUrl || null);
+
+        const snap = {
             id:        engine.selfId,
             url:       engine.selfUrl,
-            role,
-            term,
-            leaderId,
-            leaderUrl,
-            // ¡Clave para eliminar fantasmas! Solo propagar peers que estén VIVOS.
-            peers:     engine.knownPeers().filter(p => p.alive).map(p => ({ id: p.id, url: p.url })),
-            faults:    faults.snapshot(),
-            uptime:    process.uptime(),
-            ts:        Date.now(),
+            role:      role,
+            leader:    currentLeader,
+            leaderUrl: currentLeaderUrl,
+            peers:     engine.knownPeers().map(p => ({
+                id:    p.id,
+                url:   p.url,
+                alive: Boolean(p.alive),
+            })),
         };
+
+        // Propiedades auxiliares para uso interno en JS (no se incluyen en JSON / res.json)
+        Object.defineProperty(snap, "leaderId", {
+            value: currentLeader,
+            enumerable: false,
+            writable: true,
+        });
+        Object.defineProperty(snap, "term", {
+            value: term,
+            enumerable: false,
+            writable: true,
+        });
+        Object.defineProperty(snap, "uptime", {
+            value: process.uptime(),
+            enumerable: false,
+            writable: true,
+        });
+        Object.defineProperty(snap, "faults", {
+            value: faults.snapshot(),
+            enumerable: false,
+            writable: true,
+        });
+
+        return snap;
     },
 
     /**
-     * Elimina un peer del registro.
+     * Elimina un peer del registro y evita reincorporación automática
      */
     removePeer(url) {
-        if (peers.has(url)) {
-            peers.delete(url);
-            logger.info(engine.selfId, `Peer eliminado manualmente: ${url}`);
-            events.emit("cluster-update", { action: "peer-removed", url });
-            return true;
+        const cleanUrl = url ? url.replace(/\/$/, "") : null;
+        if (!cleanUrl) return false;
+        disconnectedPeers.add(cleanUrl);
+        let removed = false;
+        if (peers.has(cleanUrl)) {
+            peers.delete(cleanUrl);
+            logger.info(engine.selfId, `Peer desconectado: ${cleanUrl}`);
+            events.emit("cluster-update", { action: "peer-removed", url: cleanUrl });
+            removed = true;
         }
-        return false;
+        return removed;
     },
 
     /**
@@ -156,23 +206,53 @@ const engine = {
 
 let _loopHandle = null;
 
+function isValidPeer(peerId) {
+    if (!peerId) return false;
+    if (typeof peerId === "object") return false;
+    if (String(peerId) === "[object Object]") return false;
+    if (!isNaN(Number(peerId))) return false;
+    if (String(peerId).startsWith("http")) return false;
+    if (String(peerId).length > 20) return false;
+    return true;
+}
+
 async function _tick() {
     if (faults.paused) return;
 
     const now = Date.now();
 
-    // — Gossip: ping a todos los peers —
+    // — Gossip: ping a todos los peers enviando snapshot estricto —
     for (const [url, peer] of peers) {
         try {
             const resp = await transport.post(
                 `${url}/election/ping`,
-                { id: engine.selfId, url: engine.selfUrl, peers: engine.knownPeers().map(p => ({ id: p.id, url: p.url })) },
+                engine.snapshot(),
                 { timeout: engine.timing.rpcTimeout }
             );
 
             const data = resp.data || {};
 
-            // Actualizar el ID real del peer desde su respuesta (usa su NODE_ID letra, no la URL)
+            // Registrarse también como worker en el peer para aparecer en su Naming Service ("Quién se conecta a mi servidor")
+            if (engine.selfId && engine.selfId !== "UNCONFIGURED" && engine.selfUrl) {
+                transport.post(
+                    `${url}/register`,
+                    {
+                        name: engine.selfId,
+                        url: engine.selfUrl,
+                        platform: process.platform,
+                        hostname: require("os").hostname(),
+                    },
+                    { timeout: engine.timing.rpcTimeout }
+                ).then(() => {
+                    return transport.post(
+                        `${url}/pulse/${encodeURIComponent(engine.selfId)}`,
+                        {},
+                        { timeout: engine.timing.rpcTimeout }
+                    );
+                }).catch(() => {});
+            }
+
+            // Actualizar el ID real del peer desde su respuesta
             const resolvedId = data.id || peer.id || url;
             peers.set(url, {
                 ...peer,
@@ -185,7 +265,7 @@ async function _tick() {
             // Descubrimiento transitivo: incorporar peers del peer
             if (Array.isArray(data.peers)) {
                 for (const p of data.peers) {
-                    if (p.url && p.url !== engine.selfUrl) {
+                    if (p.url && p.url !== engine.selfUrl && isValidPeer(p.id)) {
                         if (!peers.has(p.url)) {
                             engine.upsertPeer(p.id, p.url);
                             logger.gossip(engine.selfId, `Nuevo peer descubierto transitivamente: ${p.id} (${p.url})`);
@@ -196,6 +276,22 @@ async function _tick() {
                                 peers.set(p.url, { ...existing, id: p.id });
                             }
                         }
+                    }
+                }
+            }
+
+            // Sincronización de líder por gossip
+            if (data.role === "leader") {
+                if (engine.role === "follower" && (!leaderId || leaderId === resolvedId)) {
+                    leaderId = resolvedId;
+                    leaderUrl = data.url || url;
+                } else if (engine.role === "leader" && resolvedId !== engine.selfId) {
+                    const { isHigher } = require("./ids");
+                    if (isHigher(resolvedId, engine.selfId)) {
+                        logger.election(engine.selfId, `Gossip: Líder superior detectado (${resolvedId}) → cedo liderazgo`);
+                        role = "follower";
+                        leaderId = resolvedId;
+                        leaderUrl = data.url || url;
                     }
                 }
             }
@@ -213,9 +309,10 @@ async function _tick() {
                 events.emit("peer-down", { id: peer.id, url });
 
                 // Si el peer caído era el líder, disparar elección
-                if (peer.id === leaderId || url === leaderUrl) {
+                const currentLeader = role === "leader" ? engine.selfId : leaderId;
+                if (peer.id === currentLeader || url === leaderUrl) {
                     logger.election(engine.selfId, `Líder ${peer.id} caído → iniciando elección`);
-                    events.emit("leader-lost", { leaderId: peer.id });
+                    events.emit("leader-lost", { leaderId: peer.id, leader: peer.id });
                     leaderId  = null;
                     leaderUrl = null;
                     strategy.startElection().catch(() => {});

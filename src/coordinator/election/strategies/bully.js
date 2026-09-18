@@ -43,29 +43,20 @@ class BullyStrategy extends ElectionStrategy {
         }
 
         // Enviar ELECTION a todos los peers con ID mayor
-        let anyAnswered = false;
-        const answers = higher.map(peer =>
+        higher.forEach(peer => {
             transport.post(`${peer.url}/election/message`, {
                 from: { id: e.selfId, url: e.selfUrl },
                 type: "ELECTION",
                 payload: { term: e.term }
-            }, { timeout: e.timing.rpcTimeout })
-            .then(() => { anyAnswered = true; })
-            .catch(() => {})
-        );
-
-        await Promise.allSettled(answers);
-
-        // Si ningún superior respondió tras el timeout de RPC, iniciar ventana de espera
-        if (!anyAnswered) {
-            logger.election(e.selfId, "Nadie respondió — esperando ventana de autoproclamación");
-        }
+            }, { timeout: e.timing.rpcTimeout }).catch(() => {});
+        });
 
         // Ventana antirrebote: esperar electionMin..electionMax ms antes de autoproclamarse
+        // Si no responde nadie de ID mayor con 'ANSWER' en este tiempo -> me proclamo líder
         const wait = e.timing.electionMin + Math.random() * (e.timing.electionMax - e.timing.electionMin);
         clearTimeout(this._electionTimer);
         this._electionTimer = setTimeout(() => {
-            // Solo autoproclamarse si todavía somos candidatos
+            // Solo autoproclamarse si todavía somos candidatos (nadie mandó ANSWER)
             if (e.role === "candidate") {
                 this._becomeLeader();
             }
@@ -80,7 +71,17 @@ class BullyStrategy extends ElectionStrategy {
         if (type === "ELECTION") {
             // Un nodo inferior nos pregunta si seguimos vivos
             logger.election(e.selfId, `ELECTION recibido de ${from.id}`);
-            res.json({ ok: true, type: "ANSWER", from: { id: e.selfId, url: e.selfUrl } });
+            // Responde {"ok":true} y ya. Las respuestas del algoritmo viajan como mensajes nuevos
+            res.json({ ok: true });
+
+            // Contesta 'ANSWER' enviando mensaje al emisor
+            if (from?.url) {
+                transport.post(`${from.url}/election/message`, {
+                    from: { id: e.selfId, url: e.selfUrl },
+                    type: "ANSWER",
+                    payload: { term: e.term }
+                }, { timeout: e.timing.rpcTimeout }).catch(() => {});
+            }
 
             // Si somos follower/candidate y tenemos ID mayor, iniciar nuestra propia elección
             if (e.role !== "leader" && isHigher(e.selfId, from.id)) {
@@ -88,18 +89,17 @@ class BullyStrategy extends ElectionStrategy {
             }
 
         } else if (type === "ANSWER") {
-            // Un superior nos dice que sigue vivo → cancelar autoproclamación
-            logger.election(e.selfId, `ANSWER recibido de ${from.id} — cancelo autoproclamación`);
+            // Alguien mayor que yo está vivo → el retador se calla y espera
+            logger.election(e.selfId, `ANSWER recibido de ${from.id} — me callo y espero`);
             clearTimeout(this._electionTimer);
             e.role = "follower";
             res.json({ ok: true });
 
         } else if (type === "COORDINATOR") {
-            // Alguien se proclama líder
+            // Si recibo un COORDINATOR de alguien menor que yo → no lo acepto, convoco elección (soy el matón)
             if (isHigher(e.selfId, from.id) && e.role !== "follower") {
-                // Soy superior y no estoy siguiendo — reto al nuevo "líder"
-                logger.election(e.selfId, `COORDINATOR de ${from.id} rechazado — tengo mayor ID, iniciando elección`);
-                res.json({ ok: false, reason: "challenger" });
+                logger.election(e.selfId, `COORDINATOR de ${from.id} rechazado — tengo mayor ID, convocando elección`);
+                res.json({ ok: true });
                 setImmediate(() => this.startElection());
             } else {
                 // Acepto al nuevo líder

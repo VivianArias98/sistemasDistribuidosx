@@ -93,10 +93,30 @@ app.post("/api/setup", async (req, res) => {
         await init("bully");
         engine._started = true;
     } else {
-        // Ya estaba corriendo → solo agregar el peer nuevo
-        if (cleanPeer && !engine.knownPeers().some(p => p.url === cleanPeer)) {
-            engine.upsertPeer(null, cleanPeer);
+        if (engine.role === "leader") {
+            engine.leaderId = nodeId;
         }
+        // Ya estaba corriendo → solo agregar el peer nuevo
+        if (cleanPeer) {
+            engine.allowPeer(cleanPeer);
+            if (!engine.knownPeers().some(p => p.url === cleanPeer)) {
+                engine.upsertPeer(null, cleanPeer);
+            }
+        }
+    }
+
+    if (cleanPeer) {
+        const transport = require("./election/transport");
+        transport.post(
+            `${cleanPeer}/register`,
+            {
+                name: nodeId,
+                url: cleanBase,
+                platform: process.platform,
+                hostname: require("os").hostname()
+            },
+            { timeout: 3000 }
+        ).catch(() => {});
     }
 
     res.json({ ok: true, nodeId, baseUrl: cleanBase, peers: peerUrls });

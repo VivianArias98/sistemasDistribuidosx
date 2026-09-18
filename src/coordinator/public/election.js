@@ -60,16 +60,16 @@ function updatePanel() {
     if (!selfNode) return;
     
     // Header
-    $("leader-id").textContent = clusterInfo.leaderId || "Buscando...";
-    $("term-val").textContent = selfNode.term;
+    $("leader-id").textContent = clusterInfo.leader || clusterInfo.leaderId || "Buscando...";
+    $("term-val").textContent = selfNode.term ?? clusterInfo.term ?? 0;
     $("splitbrain-alert").style.display = clusterInfo.splitBrain ? "block" : "none";
     
     // Card "Este Nodo"
     $("self-id").textContent = selfNode.id;
     $("self-role").textContent = selfNode.role;
     $("self-url").textContent = selfNode.url;
-    $("self-leader").textContent = selfNode.leaderId || "Ninguno";
-    $("self-uptime").textContent = Math.floor(selfNode.uptime) + "s";
+    $("self-leader").textContent = selfNode.leader || selfNode.leaderId || "Ninguno";
+    $("self-uptime").textContent = selfNode.uptime != null ? Math.floor(selfNode.uptime) + "s" : "—";
     
     // Faults Status
     const f = selfNode.faults || {};

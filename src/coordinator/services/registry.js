@@ -30,8 +30,8 @@ function register(name, url, ip, meta = {}) {
     const existing = workers.get(name);
 
     if (existing) {
-        // Verificar ownership por IP
-        if (existing.ip !== ip) {
+        // Verificar ownership por IP (solo si la URL difiere, para permitir proxies y túneles ngrok)
+        if (existing.ip && ip !== "unknown" && existing.ip !== "unknown" && existing.ip !== ip && existing.url !== url) {
             const err = new Error(`Conflicto: el nombre '${name}' ya pertenece a la IP ${existing.ip}`);
             err.code = "IP_CONFLICT";
             throw err;

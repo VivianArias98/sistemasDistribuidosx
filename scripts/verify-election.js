@@ -42,7 +42,10 @@ async function waitForConvergence(timeoutMs = 15000) {
             const leaders = valid.filter(s => s.role === "leader").map(s => s.id);
             const uniqueLeaders = [...new Set(leaders)];
 
-            if (uniqueLeaders.length === 1 && valid.every(s => !s.leaderId || s.leaderId === uniqueLeaders[0])) {
+            if (uniqueLeaders.length === 1 && valid.every(s => {
+                const nodeLeader = s.leader || s.leaderId;
+                return !nodeLeader || nodeLeader === uniqueLeaders[0];
+            })) {
                 return { converged: true, leader: uniqueLeaders[0], states: valid };
             }
         } catch {}
@@ -112,7 +115,7 @@ async function testSplitBrain() {
         if (cluster.cluster.splitBrain) {
             console.log(`${FAIL} SPLIT-BRAIN detectado — líderes: ${cluster.cluster.knownLeaders.join(", ")}`);
         } else {
-            console.log(`${OK} Sin split-brain — líder único: ${cluster.cluster.leaderId}`);
+            console.log(`${OK} Sin split-brain — líder único: ${cluster.cluster.leader || cluster.cluster.leaderId}`);
         }
         console.log(`   Nodos totales: ${cluster.cluster.totalNodes}, Peers vivos: ${cluster.cluster.alivePeers}`);
     } catch (err) {

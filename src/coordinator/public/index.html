@@ -33,9 +33,12 @@
             </div>
 
             <nav class="sidebar-nav">
-                <a href="/" class="nav-item active">
-                    <span style="font-size: 1.1rem;">📊</span> Panel Principal
-                </a>
+                <button class="nav-item active" id="nav-item-incoming" onclick="switchViewTab('incoming')">
+                    <span style="font-size: 1.1rem;">📥</span> Conectados a Mí
+                </button>
+                <button class="nav-item" id="nav-item-outgoing" onclick="switchViewTab('outgoing')">
+                    <span style="font-size: 1.1rem;">📤</span> Conectados por Mí
+                </button>
                 <a href="/election.html" class="nav-item">
                     <span style="font-size: 1.1rem;">🗳️</span> Clúster & Elección
                 </a>
@@ -51,201 +54,214 @@
             <!-- HEADER -->
             <header class="header">
                 <div class="header-left">
-                    <!-- Logo movido al sidebar -->
+                    <!-- Logo en el sidebar -->
                 </div>
-        <div class="header-center">
-            <div class="sys-badge" id="sys-status-badge">
-                <span class="pulse-dot active" id="pulse-dot"></span>
-                <span id="sys-status-text">Conectando...</span>
-            </div>
-        </div>
-        <div class="header-right">
-            <div class="header-meta">
-                <span class="meta-item" id="hdr-role">👤 —</span>
-                <span class="meta-item" id="hdr-term">Término: —</span>
-                <span class="meta-item" id="hdr-time">🕐 --:--:--</span>
-            </div>
-            <button class="btn btn-danger btn-sm" id="btn-kill-node" onclick="disconnectNode()"
-                title="Apaga este nodo simulando una caída">
-                🔌 Desconectar mi Nodo
-            </button>
-            <a href="/election.html" class="btn btn-primary btn-sm" id="btn-election-panel">
-                🗳️ Panel de Elección
-            </a>
-        </div>
-    </header>
-
-    <!-- LEADER BANNER -->
-    <div id="leader-banner"
-        style="display:none; background:linear-gradient(90deg,rgba(251,191,36,0.12),rgba(251,191,36,0.04)); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:10px 20px; margin:12px 24px 0; display:flex; align-items:center; gap:14px; font-size:0.9rem;">
-        <span style="font-size:1.4rem">👑</span>
-        <span style="color:var(--text-2)">Líder actual:</span>
-        <span id="leader-banner-id"
-            style="font-weight:700; color:#fbbf24; font-size:1.1rem; letter-spacing:2px">—</span>
-        <span id="leader-banner-url" style="color:var(--text-3); font-size:0.8rem"></span>
-        <span style="margin-left:auto">
-            <button class="btn btn-danger btn-sm" onclick="killLeader()" id="btn-kill-leader-banner">💀 Matar este
-                Líder</button>
-        </span>
-    </div>
-
-    <!-- KPI BAR -->
-    <section class="kpi-bar">
-        <div class="kpi-card" id="kpi-total">
-            <div class="kpi-value" id="kpi-total-val">0</div>
-            <div class="kpi-label">Peers del Cluster</div>
-        </div>
-        <div class="kpi-card active" id="kpi-active">
-            <div class="kpi-value" id="kpi-active-val">0</div>
-            <div class="kpi-label">🟢 Vivos</div>
-        </div>
-        <div class="kpi-card fallen" id="kpi-fallen">
-            <div class="kpi-value" id="kpi-fallen-val">0</div>
-            <div class="kpi-label">🔴 Caídos</div>
-        </div>
-        <div class="kpi-card workers" id="kpi-workers">
-            <div class="kpi-value" id="kpi-workers-val">0</div>
-            <div class="kpi-label">🤖 Workers</div>
-        </div>
-        <div class="kpi-card msg" id="kpi-msgs" style="display: none;">
-            <div class="kpi-value" id="kpi-msgs-val">0</div>
-            <div class="kpi-label">💬 Mensajes</div>
-        </div>
-    </section>
-
-    <!-- MAIN GRID -->
-    <main class="main-grid">
-
-        <!-- ============ COLUMNA IZQUIERDA ============ -->
-        <div class="col-left">
-
-            <!-- WORKERS (Naming Service) -->
-            <section class="card" id="section-naming">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="card-icon">🤖</span>
-                        Workers Registrados
-                        <span class="badge badge-info" id="naming-count">0 workers</span>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" onclick="loadAll()">↻ Actualizar</button>
-                </div>
-
-                <div class="table-wrap" id="nodes-table-wrap">
-                    <table class="nodes-table">
-                        <thead>
-                            <tr>
-                                <th>Estado</th>
-                                <th>Nombre</th>
-                                <th>URL</th>
-                                <th>Sin pulso</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="nodes-tbody">
-                            <tr>
-                                <td colspan="5" class="empty-cell">Sin workers registrados aún...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- PEERS DEL CLUSTER -->
-            <section class="card" id="section-peers">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="card-icon">🔗</span>
-                        Peers del Cluster
-                        <span class="badge badge-info" id="peers-count">0 peers</span>
+                <div class="header-center">
+                    <div class="sys-badge" id="sys-status-badge">
+                        <span class="pulse-dot active" id="pulse-dot"></span>
+                        <span id="sys-status-text">Conectando...</span>
                     </div>
                 </div>
-                <div class="table-wrap">
-                    <table class="nodes-table">
-                        <thead>
-                            <tr>
-                                <th>Estado</th>
-                                <th>ID</th>
-                                <th>URL</th>
-                                <th>Rol</th>
-                                <th>Último ping</th>
-                            </tr>
-                        </thead>
-                        <tbody id="peers-tbody">
-                            <tr>
-                                <td colspan="5" class="empty-cell">Sin peers conocidos...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-        </div>
-
-        <!-- ============ COLUMNA DERECHA ============ -->
-        <div class="col-right">
-
-            <!-- MENSAJERÍA (Oculto por petición del usuario de solo ver conexiones) -->
-            <section class="card" id="section-messaging" style="display: none;">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="card-icon">💬</span>
-                        Enviar Mensaje
+                <div class="header-right">
+                    <div class="header-meta">
+                        <span class="meta-item" id="hdr-node-id" style="font-weight:700; color:var(--purple);">🆔 Mi Nodo: —</span>
+                        <span class="meta-item" id="hdr-role">👤 —</span>
+                        <span class="meta-item" id="hdr-term">Término: —</span>
+                        <span class="meta-item" id="hdr-time">🕐 --:--:--</span>
                     </div>
-                </div>
-
-                <div class="msg-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">De</label>
-                            <select id="msg-from" class="input select">
-                                <option value="Admin">Admin (Panel Web)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Para</label>
-                            <select id="msg-to" class="input select">
-                                <option value="">— Selecciona —</option>
-                                <option value="Coordinador">Coordinador</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Mensaje</label>
-                        <textarea id="msg-text" class="input textarea"
-                            placeholder="Escribe tu mensaje aquí..."></textarea>
-                    </div>
-                    <button class="btn btn-primary full-width" onclick="sendMessage()" id="btn-send-msg">
-                        ➤ Enviar Mensaje
+                    <button class="btn btn-danger btn-sm" id="btn-kill-node" onclick="disconnectNode()"
+                        title="Apaga este nodo simulando una caída">
+                        🔌 Desconectar mi Nodo
                     </button>
-                    <div id="send-result" class="result-box hidden"></div>
+                    <a href="/election.html" class="btn btn-primary btn-sm" id="btn-election-panel">
+                        🗳️ Panel de Elección
+                    </a>
                 </div>
+            </header>
 
-                <!-- Historial de mensajes -->
-                <div class="sub-section">
-                    <div class="sub-title">📨 Historial</div>
-                    <div id="msg-history" class="msg-history">
-                        <div class="empty-cell">Sin mensajes aún...</div>
-                    </div>
+            <!-- LEADER BANNER -->
+            <div id="leader-banner"
+                style="display:none; background:linear-gradient(90deg,rgba(251,191,36,0.12),rgba(251,191,36,0.04)); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:10px 20px; margin:12px 24px 0; display:flex; align-items:center; gap:14px; font-size:0.9rem;">
+                <span style="font-size:1.4rem">👑</span>
+                <span style="color:var(--text-2)">Líder actual:</span>
+                <span id="leader-banner-id"
+                    style="font-weight:700; color:#fbbf24; font-size:1.1rem; letter-spacing:2px">—</span>
+                <span id="leader-banner-url" style="color:var(--text-3); font-size:0.8rem"></span>
+                <span style="margin-left:auto">
+                    <button class="btn btn-danger btn-sm" onclick="killLeader()" id="btn-kill-leader-banner">💀 Matar este Líder</button>
+                </span>
+            </div>
+
+            <!-- KPI BAR -->
+            <section class="kpi-bar">
+                <div class="kpi-card" id="kpi-workers" onclick="switchViewTab('incoming')" style="cursor:pointer;" title="Ver pestaña de conectados a mí">
+                    <div class="kpi-value" id="kpi-workers-val">0</div>
+                    <div class="kpi-label">📥 Conectados a Mí</div>
+                </div>
+                <div class="kpi-card" id="kpi-total" onclick="switchViewTab('outgoing')" style="cursor:pointer;" title="Ver pestaña de conectados por mí">
+                    <div class="kpi-value" id="kpi-total-val">0</div>
+                    <div class="kpi-label">📤 Conectados por Mí</div>
+                </div>
+                <div class="kpi-card active" id="kpi-active">
+                    <div class="kpi-value" id="kpi-active-val">0</div>
+                    <div class="kpi-label">🟢 Peers Vivos</div>
+                </div>
+                <div class="kpi-card fallen" id="kpi-fallen">
+                    <div class="kpi-value" id="kpi-fallen-val">0</div>
+                    <div class="kpi-label">🔴 Peers Caídos</div>
+                </div>
+                <div class="kpi-card msg" id="kpi-msgs" style="display: none;">
+                    <div class="kpi-value" id="kpi-msgs-val">0</div>
+                    <div class="kpi-label">💬 Mensajes</div>
                 </div>
             </section>
 
-            <!-- OBSERVABILIDAD — LOGS EN VIVO -->
-            <section class="card" id="section-observability">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="card-icon">📡</span>
-                        Eventos en Vivo (SSE)
-                        <span class="badge badge-live">EN VIVO</span>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" onclick="clearLogs()">✕ Limpiar</button>
+            <!-- SELECTOR DE PESTAÑAS (TABS) -->
+            <div class="view-tabs-container">
+                <div class="view-tabs">
+                    <button class="view-tab tab-in active" id="tab-btn-incoming" onclick="switchViewTab('incoming')">
+                        <span style="font-size: 1.1rem;">📥</span>
+                        <span>Quién se conecta a mi servidor</span>
+                        <span class="tab-badge in" id="tab-incoming-badge">0</span>
+                    </button>
+                    <button class="view-tab tab-out" id="tab-btn-outgoing" onclick="switchViewTab('outgoing')">
+                        <span style="font-size: 1.1rem;">📤</span>
+                        <span>Servidores a los que me conecto</span>
+                        <span class="tab-badge out" id="tab-outgoing-badge">0</span>
+                    </button>
                 </div>
-                <div class="terminal" id="log-terminal">
-                    <div class="terminal-placeholder">Conectando a stream de eventos...</div>
-                </div>
-            </section>
+            </div>
 
-        </div>
-    </main>
+            <!-- MAIN CONTENT AREA -->
+            <main class="main-grid" style="grid-template-columns: 1fr;">
+
+                <!-- ============================================================== -->
+                <!-- PESTAÑA 1: ¿QUIÉN SE ESTÁ CONECTANDO A MI SERVIDOR? (Entrantes) -->
+                <!-- ============================================================== -->
+                <div class="tab-panel active" id="view-panel-incoming">
+                    <section class="card connection-card incoming-card" id="section-naming">
+                        <div class="card-header incoming-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                            <div>
+                                <div class="card-title">
+                                    <span class="card-icon">📥</span>
+                                    <span>Quién se conecta a mi servidor <span class="badge-tag tag-in">ENTRANTE</span></span>
+                                    <span class="badge badge-incoming" id="naming-count">0 workers</span>
+                                </div>
+                                <div class="card-subtitle">
+                                    Nodos y workers clientes que se registraron en tu middleware y te envían pulsos (latidos) continuos.
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                                <div class="meta-pill">
+                                    <span class="pill-dot in"></span>
+                                    <span class="pill-label">Canal:</span>
+                                    <span class="pill-val">/register &amp; /pulse</span>
+                                </div>
+                                <div class="meta-pill">
+                                    <span class="pill-label">Timeout Caída:</span>
+                                    <span class="pill-val" style="color:var(--yellow)">15s</span>
+                                </div>
+                                <button class="btn btn-ghost btn-sm" onclick="loadAll()" title="Actualizar lista">↻ Refrescar</button>
+                            </div>
+                        </div>
+
+                        <div class="table-wrap" id="nodes-table-wrap">
+                            <table class="nodes-table">
+                                <thead>
+                                    <tr>
+                                        <th>Estado</th>
+                                        <th>Nombre / ID</th>
+                                        <th>URL de Origen</th>
+                                        <th>Sin pulso</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nodes-tbody">
+                                    <tr>
+                                        <td colspan="5" class="empty-cell">Esperando que algún nodo o worker se conecte a tu servidor...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ============================================================== -->
+                <!-- PESTAÑA 2: ¿A QUÉ SERVIDOR ME CONECTO YO? (Salientes / Clúster) -->
+                <!-- ============================================================== -->
+                <div class="tab-panel" id="view-panel-outgoing">
+                    <section class="card connection-card outgoing-card" id="section-peers">
+                        <div class="card-header outgoing-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                            <div>
+                                <div class="card-title">
+                                    <span class="card-icon">📤</span>
+                                    <span>Servidores a los que me conecto <span class="badge-tag tag-out">SALIENTE</span></span>
+                                    <span class="badge badge-outgoing" id="peers-count">0 peers</span>
+                                </div>
+                                <div class="card-subtitle">
+                                    Otros coordinadores remotos a los que te has enlazado para formar el clúster.
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                                <div class="meta-pill">
+                                    <span class="pill-dot out"></span>
+                                    <span class="pill-label">Mi ID:</span>
+                                    <span class="pill-val" id="my-banner-node-id" style="color:var(--purple); font-weight:700;">—</span>
+                                </div>
+                                <div class="meta-pill">
+                                    <span class="pill-label">Mi URL:</span>
+                                    <span class="pill-val url-truncate" id="my-banner-url" title="Tu URL pública" style="max-width:140px;">—</span>
+                                </div>
+                                <div class="meta-pill">
+                                    <span class="pill-label">Mi Rol:</span>
+                                    <span class="pill-val" id="my-banner-role">—</span>
+                                </div>
+                                <button class="btn btn-primary btn-sm" onclick="openConnectModal()">
+                                    ⚡ Conectar a Otro
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-wrap">
+                            <table class="nodes-table">
+                                <thead>
+                                    <tr>
+                                        <th>Estado</th>
+                                        <th>ID Servidor</th>
+                                        <th>URL Remota</th>
+                                        <th>Rol en Clúster</th>
+                                        <th>Último Contacto</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="peers-tbody">
+                                    <tr>
+                                        <td colspan="6" class="empty-cell">No te has conectado a ningún servidor externo aún. Haz clic en "⚡ Conectar a Otro".</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ============================================================== -->
+                <!-- SECCIÓN COMÚN: OBSERVABILIDAD EN VIVO (Abajo)                    -->
+                <!-- ============================================================== -->
+                <section class="card full-width-card" id="section-observability" style="margin-top: 0.5rem;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon">📡</span>
+                            <span>Consola de Observabilidad &amp; Eventos del Clúster en Vivo</span>
+                            <span class="badge badge-live">EN VIVO</span>
+                        </div>
+                        <button class="btn btn-ghost btn-sm" onclick="clearLogs()">✕ Limpiar</button>
+                    </div>
+                    <div class="terminal" id="log-terminal" style="max-height: 250px;">
+                        <div class="terminal-placeholder">Conectando a stream de eventos en vivo...</div>
+                    </div>
+                </section>
+
+            </main>
 
         </div> <!-- fin main-content -->
     </div> <!-- fin app-layout -->
@@ -258,7 +274,11 @@
         <div class="modal-content">
             <div class="modal-title">Conectar a otro Coordinador</div>
             <div class="modal-desc">
-                Ingresa la URL pública (ej. ngrok) de tu compañero para unirte a su red.
+                Ingresa tu identificador y la URL pública (ej. ngrok) de tu compañero para unirte a su red.
+            </div>
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+                <label class="form-label">Tu ID (con el que te identificarás)</label>
+                <input type="text" id="my-node-id" class="input" placeholder="ej. Coordinador-1 o TuNombre">
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
                 <label class="form-label">URL del compañero</label>
@@ -273,28 +293,79 @@
 
     <script src="app.js"></script>
     <script>
-        function openConnectModal() {
+        function switchViewTab(tab) {
+            const isIncoming = (tab === 'incoming');
+
+            // Paneles
+            const pIn = document.getElementById('view-panel-incoming');
+            const pOut = document.getElementById('view-panel-outgoing');
+            if (pIn) pIn.classList.toggle('active', isIncoming);
+            if (pOut) pOut.classList.toggle('active', !isIncoming);
+
+            // Botones de pestañas superiores
+            const btnIn = document.getElementById('tab-btn-incoming');
+            const btnOut = document.getElementById('tab-btn-outgoing');
+            if (btnIn) btnIn.classList.toggle('active', isIncoming);
+            if (btnOut) btnOut.classList.toggle('active', !isIncoming);
+
+            // Botones del sidebar
+            const navIn = document.getElementById('nav-item-incoming');
+            const navOut = document.getElementById('nav-item-outgoing');
+            if (navIn) navIn.classList.toggle('active', isIncoming);
+            if (navOut) navOut.classList.toggle('active', !isIncoming);
+
+            try { localStorage.setItem('active_view_tab', tab); } catch(e){}
+        }
+
+        // Restaurar pestaña activa guardada
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                const saved = localStorage.getItem('active_view_tab');
+                if (saved === 'outgoing') switchViewTab('outgoing');
+            } catch(e){}
+        });
+
+        async function openConnectModal() {
             document.getElementById('connect-modal').classList.add('active');
+            try {
+                const stateRes = await fetch('/election/state');
+                if (stateRes.ok) {
+                    const state = await stateRes.json();
+                    const idInput = document.getElementById('my-node-id');
+                    if (idInput && (!idInput.value || idInput.value === 'UNCONFIGURED') && state.id && state.id !== 'UNCONFIGURED') {
+                        idInput.value = state.id;
+                    }
+                }
+            } catch (e) {
+                // Fallback silencioso si falla la precarga
+            }
         }
         function closeConnectModal() {
             document.getElementById('connect-modal').classList.remove('active');
             document.getElementById('peer-connect-url').value = '';
         }
         async function submitConnect() {
+            const myId = document.getElementById('my-node-id').value.trim();
             const url = document.getElementById('peer-connect-url').value.trim();
-            if (!url) return alert('Por favor ingresa una URL válida');
+            
+            if (!url) return alert('Por favor ingresa una URL válida del compañero');
             
             try {
                 // Obtenemos la config actual
                 const stateRes = await fetch('/election/state');
                 const state = await stateRes.json();
                 
-                // Actualizamos enviando la nueva peerUrl
+                const finalNodeId = myId || state.id;
+                if (!finalNodeId || finalNodeId === 'UNCONFIGURED') {
+                    return alert('Por favor ingresa un ID con el que te identificarás');
+                }
+
+                // Actualizamos enviando la nueva peerUrl y el nodeId
                 const res = await fetch('/api/setup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        nodeId: state.id, 
+                        nodeId: finalNodeId, 
                         baseUrl: state.url, 
                         peerUrl: url 
                     })
@@ -302,9 +373,8 @@
                 
                 if (res.ok) {
                     closeConnectModal();
-                    alert('¡Conectado exitosamente! El nodo ha sido agregado.');
-                    // Recargar panel para ver cambios
-                    setTimeout(() => window.location.reload(), 500);
+                    alert(`¡Conectado exitosamente como "${finalNodeId}"!`);
+                    setTimeout(() => window.location.reload(), 400);
                 } else {
                     const data = await res.json();
                     alert('Error: ' + data.error);

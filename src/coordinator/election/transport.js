@@ -57,4 +57,11 @@ async function get(url, opts = {}) {
     return axios.get(url, { timeout, ...opts, headers });
 }
 
-module.exports = { post, get };
+async function del(url, opts = {}) {
+    if (!faults.isAllowed(url)) return;
+    const timeout = opts.timeout || 2000;
+    const headers = { ...opts.headers, "ngrok-skip-browser-warning": "true" };
+    return axios.delete(url, { timeout, ...opts, headers });
+}
+
+module.exports = { post, get, del };

@@ -118,22 +118,37 @@ async function loadNodeState() {
         const data = await r.json();
 
         // Header info
-        $("hdr-node-id").textContent = `Nodo ${data.id}`;
+        if ($("hdr-node-id")) $("hdr-node-id").textContent = `🆔 Mi Nodo: ${data.id}`;
         const roleLabels = { leader: "👑 Líder", follower: "📡 Seguidor", candidate: "🗳️ Candidato" };
-        $("hdr-role").textContent = roleLabels[data.role] || data.role;
-        $("hdr-term").textContent = `Término: ${data.term}`;
+        if ($("hdr-role")) $("hdr-role").textContent = roleLabels[data.role] || data.role;
+        if ($("hdr-term") && data.term != null) $("hdr-term").textContent = `Término: ${data.term}`;
+
+        // Banda informativa en Sección de Conexiones Salientes
+        if ($("my-banner-node-id")) $("my-banner-node-id").textContent = data.id || "—";
+        if ($("my-banner-url")) {
+            $("my-banner-url").textContent = data.url || "—";
+            $("my-banner-url").title = data.url || "";
+        }
+        if ($("my-banner-role")) {
+            $("my-banner-role").textContent = roleLabels[data.role] || data.role || "—";
+        }
 
         // Banner del líder actual
         const banner = $("leader-banner");
-        if (data.leaderId) {
-            banner.style.display = "flex";
-            $("leader-banner-id").textContent = data.leaderId;
-            $("leader-banner-url").textContent = data.leaderUrl || "";
-        } else {
-            banner.style.display = "none";
+        const currentLeader = data.leader || data.leaderId;
+        if (banner) {
+            if (currentLeader) {
+                banner.style.display = "flex";
+                if ($("leader-banner-id")) $("leader-banner-id").textContent = currentLeader;
+                if ($("leader-banner-url")) $("leader-banner-url").textContent = data.leaderUrl || "";
+            } else {
+                banner.style.display = "none";
+            }
         }
 
-    } catch {}
+    } catch (err) {
+        console.warn("loadNodeState:", err);
+    }
 }
 
 // ─── Poll: workers del Naming Service ────────────────────
@@ -153,7 +168,10 @@ async function loadWorkers() {
 
 function renderWorkers(workers) {
     const tbody = $("nodes-tbody");
-    $("naming-count").textContent = `${workers.length} worker${workers.length !== 1 ? "s" : ""}`;
+    if ($("naming-count")) $("naming-count").textContent = `${workers.length} worker${workers.length !== 1 ? "s" : ""}`;
+    if ($("tab-incoming-badge")) $("tab-incoming-badge").textContent = workers.length;
+
+    if (!tbody) return;
 
     if (workers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">Sin workers registrados aún...</td></tr>';
@@ -169,6 +187,7 @@ function renderWorkers(workers) {
             <td>
                 <div class="btn-group-row">
                     <button class="btn btn-danger btn-sm" onclick="simulateFall('${escHtml(w.name)}')">⬇ Caída</button>
+                    <button class="btn btn-ghost btn-sm" onclick="disconnectWorker('${escHtml(w.name)}')" title="Desconectar este worker">🔌 Desconectar</button>
                 </div>
             </td>
         </tr>
@@ -208,51 +227,81 @@ function updateMessageDropdown() {
 
 function renderPeers(peers, cluster) {
     const tbody = $("peers-tbody");
+    if (!tbody) return;
 
-    // Filtrar: solo mostrar peers con URLs externas (ngrok u otros), no localhost
-    const externalPeers = peers.filter(p => p.url && !p.url.includes("localhost") && !p.url.includes("127.0.0.1"));
+    // Solo considerar peers con URL válida
+    const validPeers = peers.filter(p => p.url);
 
-    $("peers-count").textContent = `${externalPeers.length} peer${externalPeers.length !== 1 ? "s" : ""}`;
-    $("kpi-total-val").textContent = externalPeers.length + 1;
-    $("kpi-active-val").textContent = externalPeers.filter(p => p.alive).length + 1;
-    $("kpi-fallen-val").textContent = externalPeers.filter(p => !p.alive).length;
+    if ($("peers-count")) $("peers-count").textContent = `${validPeers.length} peer${validPeers.length !== 1 ? "s" : ""}`;
+    if ($("tab-outgoing-badge")) $("tab-outgoing-badge").textContent = validPeers.length;
+    if ($("kpi-total-val")) $("kpi-total-val").textContent = validPeers.length;
+    if ($("kpi-active-val")) $("kpi-active-val").textContent = validPeers.filter(p => p.alive).length;
+    if ($("kpi-fallen-val")) $("kpi-fallen-val").textContent = validPeers.filter(p => !p.alive).length;
 
-    if (externalPeers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">Sin peers externos conocidos aún...</td></tr>';
+    if (validPeers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">No te has conectado a ningún servidor externo aún. Haz clic en "⚡ Conectar a Otro" para unirte a un compañero.</td></tr>';
         return;
     }
 
-    tbody.innerHTML = externalPeers.map(p => {
+    tbody.innerHTML = validPeers.map(p => {
         const snap = p.snapshot || {};
-        const role = p.alive ? (snap.role || "?") : "?";
+        const role = p.alive ? (snap.role || "peer") : "desconectado";
         const roleClass = role === "leader" ? "badge-role-leader" : role === "candidate" ? "badge-role-candidate" : "badge-role-follower";
         const elapsedStr = p.lastSeen ? Math.floor((Date.now() - p.lastSeen) / 1000) + "s" : "0s";
-        let deleteBtn = "";
-        
-        if (!p.alive) {
-            deleteBtn = `<button class="btn btn-danger btn-sm" style="padding: 2px 5px; font-size: 10px; margin-left: 10px" onclick="deletePeer('${escHtml(p.url)}')" title="Eliminar peer de la memoria">❌</button>`;
-        }
 
         return `
             <tr>
-                <td><span class="status-dot ${p.alive ? "active" : "fallen"}">${p.alive ? "VIVO" : "CAÍDO"}</span></td>
-                <td style="font-weight:600">${escHtml(p.id || "?")}</td>
+                <td><span class="status-dot ${p.alive ? "active" : "fallen"}">${p.alive ? "CONECTADO" : "SIN RESPUESTA"}</span></td>
+                <td style="font-weight:600; color:var(--text-1);">${escHtml(p.id || "?")}</td>
                 <td><span class="url-cell" title="${escHtml(p.url)}">${escHtml(p.url)}</span></td>
-                <td><span class="badge ${roleClass}">${role}</span></td>
-                <td style="color:var(--text-3)">${elapsedStr} ${deleteBtn}</td>
+                <td><span class="badge ${roleClass}">${role.toUpperCase()}</span></td>
+                <td style="color:var(--text-3)">${elapsedStr}</td>
+                <td>
+                    <button class="btn btn-danger btn-sm" onclick="disconnectPeer('${escHtml(p.url)}', '${escHtml(p.id || '')}')" title="Desconectarse de este servidor">
+                        🔌 Desconectar
+                    </button>
+                </td>
             </tr>
         `;
     }).join("");
 }
 
-// ─── Eliminar Peer Manualmente ───────────────────────────────────────────────
-async function deletePeer(url) {
+// ─── Desconectar Peer Manualmente ───────────────────────────────────────────
+async function disconnectPeer(url, id) {
+    const label = id ? `"${id}" (${url})` : url;
+    if (!confirm(`¿Estás seguro de que deseas desconectarte del servidor ${label}?`)) {
+        return;
+    }
+
     try {
-        await fetch(`/election/peers?url=${encodeURIComponent(url)}`, { method: "DELETE" });
-        showToast("Peer eliminado de la memoria", "success");
-        await loadCluster();
+        const resp = await fetch(`/election/peers?url=${encodeURIComponent(url)}&id=${encodeURIComponent(id || '')}`, {
+            method: "DELETE"
+        });
+        if (resp.ok) {
+            showToast(`Desconectado exitosamente de ${id || url}`, "info");
+            await loadAll();
+        } else {
+            const data = await resp.json();
+            showToast("Error: " + (data.error || "No se pudo desconectar"), "error");
+        }
     } catch (err) {
-        showToast("Error eliminando peer", "error");
+        showToast("Error al desconectar: " + err.message, "error");
+    }
+}
+
+// ─── Desconectar Worker Manualmente ─────────────────────────────────────────
+async function disconnectWorker(name) {
+    if (!confirm(`¿Estás seguro de que deseas desconectar a "${name}"?`)) return;
+    try {
+        const resp = await fetch(`/unregister/${encodeURIComponent(name)}`, { method: "POST" });
+        if (resp.ok) {
+            showToast(`Worker "${name}" desconectado`, "info");
+            await loadAll();
+        } else {
+            showToast("No se pudo desregistrar el worker", "error");
+        }
+    } catch (e) {
+        showToast("Error de red al desconectar worker", "error");
     }
 }
 

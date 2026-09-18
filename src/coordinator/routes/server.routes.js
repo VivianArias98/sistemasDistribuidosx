@@ -18,12 +18,13 @@ const ensureLeader = (req, res, next) => {
     if (engine.role === "leader") return next();
 
     // 2. Si no soy líder, preparo la respuesta con el líder actual y los peers
-    const peers = engine.knownPeers().filter(p => p.alive).map(p => ({ id: p.id, url: p.url, alive: p.alive }));
+    const peers = engine.knownPeers().map(p => ({ id: p.id, url: p.url, alive: Boolean(p.alive) }));
 
     if (engine.leaderUrl) {
-        // Sé quién es el líder → 409 (Redirección para el Camino Rápido)
+        // Sé quién es el líder → 409 (Redirección con nombre del líder y URL)
         return res.status(409).json({ 
-            leader: engine.leaderUrl, 
+            leader: engine.leaderId,
+            leaderUrl: engine.leaderUrl, 
             peers 
         });
     } else {
