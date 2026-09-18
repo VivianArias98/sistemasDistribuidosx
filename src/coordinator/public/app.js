@@ -180,18 +180,30 @@ function renderWorkers(workers) {
 
     tbody.innerHTML = workers.map(w => {
         let role = (w.role || "worker").toLowerCase();
+        let displayUrl = w.url;
         
-        // Sincronizar el rol real desde la red de gossip (engine) si conocemos esta URL
+        // Sincronizar el rol y la URL real desde la red de gossip (engine) si conocemos a este peer
         if (typeof allPeers !== 'undefined' && Array.isArray(allPeers)) {
             const clusterPeer = allPeers.find(p => {
                 const pUrl = (p.url || "").replace(/\/$/, "");
                 const wUrl = (w.url || "").replace(/\/$/, "");
-                return pUrl === wUrl;
+                return pUrl === wUrl || p.id === w.name;
             });
-            if (clusterPeer && clusterPeer.snapshot && clusterPeer.snapshot.role) {
-                role = clusterPeer.snapshot.role.toLowerCase();
+            
+            if (clusterPeer) {
+                if (clusterPeer.snapshot && clusterPeer.snapshot.role) {
+                    role = clusterPeer.snapshot.role.toLowerCase();
+                }
+                // Si el peer remoto está mal configurado y dice ser "localhost", pero 
+                // nosotros sabemos su URL real de ngrok (porque lo tenemos en la tabla de clúster), la corregimos visualmente.
+                if (displayUrl.includes("localhost") || displayUrl.includes("127.0.0.1")) {
+                    if (clusterPeer.url && !clusterPeer.url.includes("localhost")) {
+                        displayUrl = clusterPeer.url;
+                    }
+                }
             }
         }
+        
         const roleClass = role === "leader" ? "badge-role-leader" 
                         : role === "candidate" ? "badge-role-candidate" 
                         : role === "follower" ? "badge-role-follower" 
@@ -201,7 +213,7 @@ function renderWorkers(workers) {
             <tr>
                 <td><span class="status-dot ${w.status === "ACTIVO" ? "active" : "fallen"}">${w.status === "ACTIVO" ? "ACTIVO" : "CAÍDO"}</span></td>
                 <td style="font-weight:600">${escHtml(w.name)}</td>
-                <td><span class="url-cell" title="${escHtml(w.url)}">${escHtml(w.url)}</span></td>
+                <td><span class="url-cell" title="${escHtml(displayUrl)}">${escHtml(displayUrl)}</span></td>
                 <td><span class="badge ${roleClass}">${role.toUpperCase()}</span></td>
                 <td style="color:${w.hasPulse ? "var(--green)" : "var(--red)"}">${w.secondsWithoutPulse}s</td>
                 <td>

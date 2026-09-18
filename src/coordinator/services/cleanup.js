@@ -21,6 +21,12 @@ function start() {
                 logger.timeout("Cleanup", `Worker CAÍDO tras ${Math.floor(elapsed / 1000)}s: ${worker.name}`);
                 events.emit("worker-down", { name: worker.name, url: worker.url });
             }
+            
+            // Si pasan más de 20 segundos sin latido, lo desconectamos/eliminamos automáticamente de la tabla
+            if (elapsed > 20000) {
+                registry.unregister(worker.name);
+                logger.info("Cleanup", `Worker ELIMINADO automáticamente tras >20s sin latido: ${worker.name}`);
+            }
         }
     }, 3000);
 
