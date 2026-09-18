@@ -71,9 +71,14 @@ const engine = {
     /**
      * Añade o actualiza un peer conocido.
      */
-    upsertPeer(id, url, extraData = {}) {
+    upsertPeer(id, url, extraData = {}, force = false) {
         const cleanUrl = url ? url.replace(/\/$/, "") : null;
         const cleanSelf = engine.selfUrl ? engine.selfUrl.replace(/\/$/, "") : null;
+        
+        if (force && cleanUrl) {
+            disconnectedPeers.delete(cleanUrl);
+        }
+
         if (!cleanUrl || cleanUrl === cleanSelf || disconnectedPeers.has(cleanUrl)) return;
         if (id && engine.selfId && id === engine.selfId) return;
 

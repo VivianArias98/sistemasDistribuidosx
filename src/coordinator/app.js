@@ -88,8 +88,8 @@ app.post("/api/setup", async (req, res) => {
     // Iniciar el engine si aún no estaba inicializado
     const { init, engine, start } = require("./election/engine");
     if (engine.selfId === "UNCONFIGURED" || !engine._started) {
-        // Agregar peer al engine si viene uno
-        if (cleanPeer) engine.upsertPeer(null, cleanPeer);
+        // Agregar peer al engine si viene uno (forzando la conexión por si estaba en blacklist)
+        if (cleanPeer) engine.upsertPeer(null, cleanPeer, {}, true);
         await init("bully");
         engine._started = true;
     } else {
@@ -100,7 +100,7 @@ app.post("/api/setup", async (req, res) => {
         if (cleanPeer) {
             engine.allowPeer(cleanPeer);
             if (!engine.knownPeers().some(p => p.url === cleanPeer)) {
-                engine.upsertPeer(null, cleanPeer);
+                engine.upsertPeer(null, cleanPeer, {}, true);
             }
         }
     }
