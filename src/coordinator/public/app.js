@@ -96,6 +96,8 @@ function appendLog(ev) {
     if (!msg) {
         if (ev.type === "connected" && ev.state) {
             msg = `Clúster sincronizado. Rol local: <b>${ev.state.role}</b> | Líder actual: <b>${ev.state.leader || 'Ninguno'}</b>`;
+        } else if (ev.type === "message" && ev.entry) {
+            msg = `De <b>${ev.entry.from}</b> para <b>${ev.entry.to}</b>: "${ev.entry.message}" <span style="opacity:0.6">(${ev.entry.status})</span>`;
         } else {
             msg = `<span style="font-family: monospace; color: var(--text-3); font-size: 0.9em;">${JSON.stringify(ev)}</span>`;
         }
@@ -619,6 +621,60 @@ async function sendMessage() {
     } finally {
         btn.disabled = false;
         btn.textContent = "➤ Enviar Mensaje";
+    }
+}
+
+function changeMyName() {
+    const modal = document.getElementById("rename-modal");
+    const input = document.getElementById("rename-node-input");
+    if (modal && input) {
+        input.value = mySelfId !== "UNCONFIGURED" ? mySelfId : "";
+        modal.classList.add("active");
+        setTimeout(() => input.focus(), 100);
+    }
+}
+
+function closeRenameModal() {
+    const modal = document.getElementById("rename-modal");
+    if (modal) modal.classList.remove("active");
+}
+
+async function submitRename() {
+    const input = document.getElementById("rename-node-input");
+    if (!input) return;
+    
+    const newName = input.value.trim();
+    if (!newName || newName === mySelfId) {
+        closeRenameModal();
+        return;
+    }
+
+    try {
+        const stateRes = await fetch('/election/state');
+        const state = await stateRes.json();
+        
+        // Use the existing setup API to change ID
+        const res = await fetch('/api/setup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                nodeId: newName, 
+                baseUrl: state.url
+            })
+        });
+        
+        if (res.ok) {
+            closeRenameModal();
+            showToast(`¡Nombre actualizado exitosamente a "${newName}"!`);
+            mySelfId = newName;
+            if ($("hdr-node-id")) $("hdr-node-id").textContent = `🆔 Mi Nodo: ${mySelfId}`;
+            if ($("my-banner-node-id")) $("my-banner-node-id").textContent = mySelfId;
+        } else {
+            const data = await res.json();
+            alert('Error: ' + data.error);
+        }
+    } catch (err) {
+        alert('Error al cambiar nombre: ' + err.message);
     }
 }
 

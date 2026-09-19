@@ -102,7 +102,7 @@
                 </div>
                 <div class="header-right">
                     <div class="header-meta">
-                        <span class="meta-item" id="hdr-node-id" style="font-weight:700; color:var(--purple);">🆔 Mi Nodo: —</span>
+                        <span class="meta-item" id="hdr-node-id" style="font-weight:700; color:var(--purple); cursor: pointer;" onclick="changeMyName()" title="Haz clic para cambiar el nombre de tu nodo">🆔 Mi Nodo: —</span>
                         <span class="meta-item" id="hdr-role">👤 —</span>
                         <span class="meta-item" id="hdr-term">Término: —</span>
                         <span class="meta-item" id="hdr-time">🕐 --:--:--</span>
@@ -473,6 +473,24 @@
             <div style="display:flex; gap:0.5rem;">
                 <button class="btn btn-ghost full-width" onclick="closeConnectModal()">Cancelar</button>
                 <button class="btn btn-primary full-width" onclick="submitConnect()">⚡ Conectar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE RENOMBRAR -->
+    <div class="modal-overlay" id="rename-modal">
+        <div class="modal-content">
+            <div class="modal-title">Renombrar Nodo</div>
+            <div class="modal-desc">
+                Ingresa el nuevo identificador para este nodo en la red.
+            </div>
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+                <label class="form-label">Nuevo Nombre</label>
+                <input type="text" id="rename-node-input" class="input" placeholder="ej. Coordinador-X" onkeypress="if(event.key === 'Enter') submitRename()">
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top: 1rem;">
+                <button class="btn btn-ghost full-width" onclick="closeRenameModal()">Cancelar</button>
+                <button class="btn btn-primary full-width" onclick="submitRename()">⚡ Guardar</button>
             </div>
         </div>
     </div>
