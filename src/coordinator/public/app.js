@@ -165,6 +165,36 @@ async function loadNodeState() {
             }
         }
 
+        // Detección de cambio de líder para registro en el chat
+        if (currentLeader && currentLeader !== window.lastKnownLeaderId) {
+            if (window.lastKnownLeaderId !== null && window.lastKnownLeaderId !== "Líder") {
+                // El líder cambió
+                if (typeof window.localSystemMessages !== "undefined") {
+                    window.localSystemMessages.push({
+                        id: "sys_" + Date.now(),
+                        from: "Sistema",
+                        to: "Todos",
+                        message: `🔄 Cambio de líder detectado. El nuevo líder del clúster es: ${currentLeader}`,
+                        timestamp: Date.now(),
+                        status: "ENTREGADO",
+                        isSystem: true
+                    });
+                }
+                
+                // Si el nodo actual es un seguidor, actualizar su contacto
+                if (window.nodeRole !== 'leader' && typeof currentLeaderContact !== 'undefined') {
+                    currentLeaderContact = { name: currentLeader, url: data.leaderUrl };
+                    if (document.getElementById("chat-current-name")) {
+                        document.getElementById("chat-current-name").textContent = currentLeader;
+                    }
+                    if (document.getElementById("chat-current-status")) {
+                        document.getElementById("chat-current-status").textContent = data.leaderUrl;
+                    }
+                }
+            }
+            window.lastKnownLeaderId = currentLeader;
+        }
+
     } catch (err) {
         console.warn("loadNodeState:", err);
     }
@@ -766,12 +796,18 @@ async function loadMessages() {
 
 // ─── LÓGICA DEL CHAT DEDICADO AL LÍDER ───────────────────────────────────────────
 let currentLeaderContact = null; // { name, url }
+window.localSystemMessages = []; // Mensajes de sistema del frontend
+window.lastKnownLeaderId = null; 
 
 async function loadMessages() {
     try {
         const r = await fetch("/api/messages");
         if (r.ok) {
-            allMessages = await r.json();
+            let backendMsgs = await r.json();
+            // Mezclar mensajes del backend con los mensajes del sistema local y ordenar por fecha descendente
+            allMessages = backendMsgs.concat(window.localSystemMessages);
+            allMessages.sort((a, b) => b.timestamp - a.timestamp);
+            
             if (window.nodeRole === 'leader') {
                 renderLeaderInbox();
             } else if (currentLeaderContact) {
@@ -882,6 +918,17 @@ function renderLeaderChatHistory() {
     historyDiv.innerHTML = msgs.map(m => {
         const isMine = m.from === myId || m.from === "Coordinador" || m.from.startsWith(myId);
         const time = m.receivedAt || new Date(m.timestamp || Date.now()).toLocaleTimeString("es-MX", { hour12: false });
+        
+        if (m.isSystem) {
+            return `
+                <div style="text-align:center; margin: 1.5rem 0;">
+                    <span style="background: var(--bg-3); color: var(--text-2); font-size: 0.8rem; padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border);">
+                        ${escHtml(m.message)}
+                    </span>
+                </div>
+            `;
+        }
+
         const alignmentClass = isMine ? "mine" : "theirs";
         const senderLabel = isMine ? "" : `<div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">👑 Líder (${escHtml(m.from)})</div>`;
         
