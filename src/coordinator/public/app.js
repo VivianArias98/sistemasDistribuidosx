@@ -109,6 +109,13 @@ function appendLog(ev) {
     `;
     terminal.prepend(el);
 
+    // Integración con Chat Dedicado
+    if (ev.type === "message" || ev.message) {
+        if (typeof window.appendChatBubble === "function") {
+            window.appendChatBubble(ev);
+        }
+    }
+
     // Limitar a 80 entradas
     while (terminal.children.length > 80) terminal.lastChild?.remove();
 }
@@ -234,8 +241,8 @@ function renderWorkers(workers) {
         `;
     }).join("");
 
-    // Sincronizar select de mensajería
     updateMessageDropdown();
+    if (typeof updateChatContacts === "function") updateChatContacts();
 }
 
 // ─── Poll: cluster (peers) ────────────────────────────────
@@ -248,6 +255,7 @@ async function loadCluster() {
         renderPeers(allPeers, data.cluster);
         renderTopologyMap(allPeers);
         updateMessageDropdown();
+        if (typeof updateChatContacts === "function") updateChatContacts();
     } catch {}
 }
 
@@ -735,6 +743,157 @@ function escHtml(str) {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+}
+
+// ─── LÓGICA DEL CHAT DEDICADO ──────────────────────────────────────────────────
+let allMessages = [];
+
+async function loadMessages() {
+    try {
+        const r = await fetch("/api/messages");
+        if (r.ok) {
+            allMessages = await r.json();
+            if (window.currentChatContact) {
+                renderChatHistory(window.currentChatContact);
+            }
+        }
+    } catch {}
+}
+
+// Global hook needed in switchViewTab
+window.updateChatContacts = function() {
+    const list = document.getElementById("chat-contacts-list");
+    if (!list) return;
+
+    const targets = [];
+    allWorkers.forEach(w => targets.push({ name: w.name, url: w.url, status: w.status, isPeer: false }));
+    allPeers.forEach(p => {
+        if (p.id && p.id !== "UNCONFIGURED") {
+            targets.push({ name: p.id, url: p.url, status: p.alive ? "ACTIVO" : "CAIDO", isPeer: true });
+        }
+    });
+
+    // Eliminar duplicados
+    const unique = [];
+    const seen = new Set();
+    targets.forEach(t => {
+        if (!seen.has(t.name)) {
+            seen.add(t.name);
+            unique.push(t);
+        }
+    });
+
+    if (unique.length === 0) {
+        list.innerHTML = '<div style="text-align:center; color:var(--text-3); padding:1rem;">Nadie conectado aún.</div>';
+        return;
+    }
+
+    list.innerHTML = unique.map(t => {
+        const isActive = window.currentChatContact === t.name;
+        const color = t.status === "ACTIVO" ? "var(--green)" : "var(--red)";
+        const dot = t.status === "ACTIVO" ? "🟢" : "🔴";
+        return `
+            <div class="chat-contact ${isActive ? 'active' : ''}" onclick="selectChatContact('${escHtml(t.name)}', '${escHtml(t.url)}')">
+                <div class="chat-contact-name">
+                    ${escHtml(t.name)}
+                    <span style="font-size: 0.8rem;">${t.isPeer ? '👑' : '🤖'}</span>
+                </div>
+                <div class="chat-contact-status" style="color: ${color}">${dot} ${t.status}</div>
+            </div>
+        `;
+    }).join("");
+}
+
+window.selectChatContact = function(name, url) {
+    window.currentChatContact = name;
+    document.getElementById("chat-current-name").textContent = name;
+    
+    const statusBadge = document.getElementById("chat-current-status");
+    statusBadge.style.display = "inline-block";
+    statusBadge.textContent = url;
+    
+    document.getElementById("chat-dedicated-input").disabled = false;
+    document.getElementById("btn-chat-send").disabled = false;
+    
+    window.updateChatContacts(); // Re-render to highlight active
+    renderChatHistory(name);
+}
+
+function renderChatHistory(contactName) {
+    const historyDiv = document.getElementById("chat-history");
+    if (!historyDiv) return;
+    
+    const myId = document.getElementById("my-node-id")?.value || "Coordinador";
+    
+    // Filtrar mensajes que involucren a este contacto
+    const msgs = allMessages.filter(m => 
+        m.from === contactName || m.to === contactName
+    ).reverse(); // Asegurar orden cronológico si el array está invertido, o asumiendo el orden correcto.
+
+    if (msgs.length === 0) {
+        historyDiv.innerHTML = `
+            <div class="chat-placeholder-msg">
+                <span style="font-size: 2rem;">💬</span>
+                <span>No hay mensajes con ${escHtml(contactName)}</span>
+            </div>
+        `;
+        return;
+    }
+
+    historyDiv.innerHTML = msgs.map(m => {
+        const isMine = m.from === myId || m.from === "Coordinador" || m.from === engine?.selfId;
+        const time = m.receivedAt || new Date(m.timestamp || Date.now()).toLocaleTimeString("es-MX", { hour12: false });
+        const alignmentClass = isMine ? "mine" : "theirs";
+        
+        return `
+            <div class="chat-bubble-wrapper ${alignmentClass}">
+                <div class="chat-bubble">
+                    ${escHtml(m.message)}
+                </div>
+                <span class="chat-time">${time}</span>
+            </div>
+        `;
+    }).join("");
+    
+    // Scroll al final
+    historyDiv.scrollTop = historyDiv.scrollHeight;
+}
+
+window.appendChatBubble = function(ev) {
+    // Si llega un evento por SSE, recargar mensajes para asegurar sincronía
+    if (document.getElementById("view-panel-chat")?.classList.contains("active")) {
+        loadMessages();
+    }
+}
+
+async function sendDedicatedMessage() {
+    const input = document.getElementById("chat-dedicated-input");
+    const target = window.currentChatContact;
+    if (!target || !input) return;
+
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    input.value = ""; // Clear quickly for UX
+    
+    try {
+        const myId = document.getElementById("my-node-id")?.value || "Coordinador";
+        const r = await fetch("/api/send-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ from: myId, to: target, message: msg })
+        });
+        
+        if (r.ok) {
+            // Recargar mensajes inmediatamente
+            await loadMessages();
+        } else {
+            const data = await r.json();
+            showToast(`Error al enviar: ${data.error}`, "error");
+        }
+    } catch (err) {
+        showToast(`Error de red: ${err.message}`, "error");
+    }
 }
 
 // ─── Init ──────────────────────────────────────────────────

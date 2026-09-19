@@ -13,6 +13,38 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* ─── CHAT DEDICADO ─── */
+        .chat-container { display: flex; height: 550px; background: rgba(15,23,42,0.8); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; margin-top: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .chat-sidebar { width: 280px; background: rgba(0,0,0,0.4); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; }
+        .chat-sidebar-header { padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); font-weight: 600; color: var(--text-1); background: rgba(0,0,0,0.2); }
+        .chat-contacts { flex: 1; overflow-y: auto; padding: 0.5rem; display: flex; flex-direction: column; gap: 4px; }
+        .chat-contact { padding: 0.75rem 1rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 4px; border: 1px solid transparent; }
+        .chat-contact:hover { background: rgba(255,255,255,0.05); }
+        .chat-contact.active { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.3); border-left: 3px solid var(--primary); }
+        .chat-contact-name { font-weight: 600; color: var(--text-1); display: flex; justify-content: space-between; align-items: center; }
+        .chat-contact-status { font-size: 0.75rem; color: var(--text-3); font-family: monospace; }
+        
+        .chat-main { flex: 1; display: flex; flex-direction: column; background: rgba(30,41,59,0.3); position: relative; }
+        .chat-header { padding: 1rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); display: flex; justify-content: space-between; align-items: center; }
+        .chat-header-name { font-weight: 600; font-size: 1.1rem; color: var(--text-1); }
+        
+        .chat-history { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+        
+        .chat-bubble-wrapper { display: flex; flex-direction: column; max-width: 75%; }
+        .chat-bubble-wrapper.mine { align-self: flex-end; align-items: flex-end; }
+        .chat-bubble-wrapper.theirs { align-self: flex-start; align-items: flex-start; }
+        
+        .chat-bubble { padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.95rem; line-height: 1.4; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .mine .chat-bubble { background: linear-gradient(135deg, var(--primary), #2563eb); color: white; border-bottom-right-radius: 2px; }
+        .theirs .chat-bubble { background: rgba(255,255,255,0.1); color: var(--text-1); border-bottom-left-radius: 2px; border: 1px solid rgba(255,255,255,0.05); }
+        
+        .chat-time { font-size: 0.7rem; color: var(--text-3); margin-top: 4px; }
+        .mine .chat-time { color: rgba(255,255,255,0.7); }
+        
+        .chat-input-area { padding: 1rem 1.5rem; background: rgba(0,0,0,0.4); border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.75rem; align-items: center; }
+        .chat-placeholder-msg { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-3); flex-direction: column; gap: 1rem; text-align: center; font-size: 1.1rem; }
+    </style>
 </head>
 
 <body>
@@ -47,6 +79,9 @@
                 </button>
                 <button class="nav-item" id="nav-item-miniserver" onclick="switchViewTab('miniserver')">
                     <span style="font-size: 1.1rem;">🤖</span> Casos miniServer
+                </button>
+                <button class="nav-item" id="nav-item-chat" onclick="switchViewTab('chat')">
+                    <span style="font-size: 1.1rem;">💬</span> Mensajería Directa
                 </button>
             </nav>
         </aside>
@@ -315,28 +350,56 @@
                 </div>
 
                 <!-- ============================================================== -->
+                <!-- PESTAÑA 4: CHAT DEDICADO -->
+                <!-- ============================================================== -->
+                <div class="tab-panel" id="view-panel-chat">
+                    <div class="chat-container">
+                        <!-- Panel Izquierdo: Contactos -->
+                        <div class="chat-sidebar">
+                            <div class="chat-sidebar-header">
+                                💬 Mis Contactos
+                            </div>
+                            <div class="chat-contacts" id="chat-contacts-list">
+                                <div style="text-align:center; color:var(--text-3); margin-top:2rem;">Cargando red...</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Panel Derecho: Conversación -->
+                        <div class="chat-main">
+                            <div class="chat-header">
+                                <div class="chat-header-name" id="chat-current-name">Selecciona un contacto</div>
+                                <span class="badge" id="chat-current-status" style="display:none;"></span>
+                            </div>
+                            
+                            <div class="chat-history" id="chat-history">
+                                <div class="chat-placeholder-msg">
+                                    <span style="font-size: 3rem;">👋</span>
+                                    <span>Selecciona un Worker o Peer a la izquierda para empezar a chatear.</span>
+                                </div>
+                            </div>
+                            
+                            <div class="chat-input-area">
+                                <input type="text" id="chat-dedicated-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje..." onkeypress="if(event.key === 'Enter') sendDedicatedMessage()" disabled>
+                                <button class="btn btn-primary" id="btn-chat-send" onclick="sendDedicatedMessage()" disabled>Enviar 💬</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================== -->
                 <!-- SECCIÓN COMÚN: OBSERVABILIDAD EN VIVO Y MENSAJERÍA DIRECTA     -->
                 <!-- ============================================================== -->
                 <section class="card full-width-card" id="section-observability" style="margin-top: 0.5rem;">
                     <div class="card-header">
                         <div class="card-title">
                             <span class="card-icon">📡</span>
-                            <span>Observabilidad &amp; Chat Directo (Eventos en Vivo)</span>
+                            <span>Observabilidad &amp; Eventos del Clúster</span>
                             <span class="badge badge-live">EN VIVO</span>
                         </div>
                         <button class="btn btn-ghost btn-sm" onclick="clearLogs()">✕ Limpiar Logs</button>
                     </div>
 
-                    <!-- CHAT BAR PARA ENVIAR MENSAJES -->
-                    <div class="chat-bar" style="padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 0.75rem; align-items: center; background: rgba(0,0,0,0.15);">
-                        <select id="msg-to" class="input" style="width: 220px; font-weight: 500;">
-                            <option value="Todos" selected>🌐 Transmitir a todos (Broadcast)</option>
-                        </select>
-                        <input type="text" id="chat-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje para los workers/peers..." onkeypress="if(event.key === 'Enter') sendChatMessage()">
-                        <button class="btn btn-primary" onclick="sendChatMessage()" style="padding: 0.5rem 1.25rem;">Enviar 💬</button>
-                    </div>
-
-                    <div class="terminal" id="log-terminal" style="max-height: 250px; border-top-left-radius: 0; border-top-right-radius: 0;">
+                    <div class="terminal" id="log-terminal" style="max-height: 250px;">
                         <div class="terminal-placeholder">Conectando a stream de eventos en vivo...</div>
                     </div>
                 </section>
@@ -377,18 +440,23 @@
 
     <script src="app.js"></script>
     <script>
+        let currentChatContact = null;
+
         function switchViewTab(tab) {
             const isIncoming = (tab === 'incoming');
             const isOutgoing = (tab === 'outgoing');
             const isMiniserver = (tab === 'miniserver');
+            const isChat = (tab === 'chat');
 
             // Paneles
             const pIn = document.getElementById('view-panel-incoming');
             const pOut = document.getElementById('view-panel-outgoing');
             const pMini = document.getElementById('view-panel-miniserver');
+            const pChat = document.getElementById('view-panel-chat');
             if (pIn) pIn.classList.toggle('active', isIncoming);
             if (pOut) pOut.classList.toggle('active', isOutgoing);
             if (pMini) pMini.classList.toggle('active', isMiniserver);
+            if (pChat) pChat.classList.toggle('active', isChat);
 
             // Botones de pestañas superiores (si existen)
             const btnIn = document.getElementById('tab-btn-incoming');
@@ -400,9 +468,11 @@
             const navIn = document.getElementById('nav-item-incoming');
             const navOut = document.getElementById('nav-item-outgoing');
             const navMini = document.getElementById('nav-item-miniserver');
+            const navChat = document.getElementById('nav-item-chat');
             if (navIn) navIn.classList.toggle('active', isIncoming);
             if (navOut) navOut.classList.toggle('active', isOutgoing);
             if (navMini) navMini.classList.toggle('active', isMiniserver);
+            if (navChat) navChat.classList.toggle('active', isChat);
 
             try { localStorage.setItem('active_view_tab', tab); } catch(e){}
         }
