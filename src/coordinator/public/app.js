@@ -5,11 +5,12 @@
 
 const POLL_INTERVAL = 4000;
 
-// ─── Estado local del panel ───────────────────────────────
+// ─── Estado Local ─────────────────────────────────────────
 let allWorkers = [];
 let allPeers   = [];
 let msgCount   = 0;
 let logLines   = [];
+let mySelfId   = "Coordinador"; // Se actualiza automáticamente al cargar estado
 
 // ─── Helpers ──────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -128,11 +129,13 @@ function clearLogs() {
 // ─── Poll: estado del coordinador ─────────────────────────
 async function loadNodeState() {
     try {
+
         const r = await fetch("/election/state");
         if (!r.ok) return;
         const data = await r.json();
 
         // Header info
+        if (data.id && data.id !== "UNCONFIGURED") mySelfId = data.id;
         if ($("hdr-node-id")) $("hdr-node-id").textContent = `🆔 Mi Nodo: ${data.id}`;
         const roleLabels = { leader: "👑 Líder", follower: "📡 Seguidor", candidate: "🗳️ Candidato" };
         if ($("hdr-role")) $("hdr-role").textContent = roleLabels[data.role] || data.role;
@@ -823,7 +826,7 @@ function renderChatHistory(contactName) {
     const historyDiv = document.getElementById("chat-history");
     if (!historyDiv) return;
     
-    const myId = document.getElementById("my-node-id")?.value || "Coordinador";
+    const myId = mySelfId || "Coordinador";
     
     // Filtrar mensajes que involucren a este contacto
     const msgs = allMessages.filter(m => 
@@ -860,10 +863,8 @@ function renderChatHistory(contactName) {
 }
 
 window.appendChatBubble = function(ev) {
-    // Si llega un evento por SSE, recargar mensajes para asegurar sincronía
-    if (document.getElementById("view-panel-chat")?.classList.contains("active")) {
-        loadMessages();
-    }
+    // Siempre recargar mensajes cuando llega un evento de mensaje
+    loadMessages();
 }
 
 async function sendDedicatedMessage() {
@@ -877,7 +878,7 @@ async function sendDedicatedMessage() {
     input.value = ""; // Clear quickly for UX
     
     try {
-        const myId = document.getElementById("my-node-id")?.value || "Coordinador";
+        const myId = mySelfId || "Coordinador";
         const r = await fetch("/api/send-message", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -898,6 +899,15 @@ async function sendDedicatedMessage() {
 
 // ─── Init ──────────────────────────────────────────────────
 connectSSE();
-loadNodeState();
+loadNodeState().then(() => {
+    // Cargar mensajes iniciales después de tener el selfId
+    loadMessages();
+});
 loadAll();
 setInterval(() => { loadNodeState(); loadAll(); }, POLL_INTERVAL);
+// Recargar mensajes periódicamente si la pestaña de chat está activa
+setInterval(() => {
+    if (document.getElementById("view-panel-chat")?.classList.contains("active")) {
+        loadMessages();
+    }
+}, 3000);

@@ -475,6 +475,12 @@
             if (navChat) navChat.classList.toggle('active', isChat);
 
             try { localStorage.setItem('active_view_tab', tab); } catch(e){}
+
+            // Si se abre la pestaña de chat, cargar contactos y mensajes
+            if (isChat) {
+                if (typeof updateChatContacts === "function") updateChatContacts();
+                if (typeof loadMessages === "function") loadMessages();
+            }
         }
 
         // Restaurar pestaña activa guardada
