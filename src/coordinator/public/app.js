@@ -857,6 +857,8 @@ async function connectToLeaderChat() {
             // document.getElementById("chat-connect-screen").style.display = "none"; // Ya no se oculta
             document.getElementById("chat-active-screen").style.display = "flex";
             document.getElementById("btn-chat-disconnect").style.display = "inline-block";
+            const clearBtn = document.getElementById("btn-chat-clear");
+            if(clearBtn) clearBtn.style.display = "inline-block";
             
             document.getElementById("chat-current-name").textContent = finalId;
             const statusBadge = document.getElementById("chat-current-status");
@@ -879,8 +881,27 @@ function disconnectLeaderChat() {
     currentLeaderContact = null;
     document.getElementById("chat-active-screen").style.display = "none";
     document.getElementById("btn-chat-disconnect").style.display = "none";
+    const clearBtn = document.getElementById("btn-chat-clear");
+    if(clearBtn) clearBtn.style.display = "none";
     document.getElementById("chat-connect-status").innerHTML = "";
     document.getElementById("chat-ngrok-url").value = "";
+}
+
+async function clearChat() {
+    if (!confirm("¿Estás seguro de que deseas vaciar todo el historial de chat de este servidor?")) return;
+    
+    try {
+        await fetch('/api/messages', { method: 'DELETE' });
+        window.localSystemMessages = [];
+        allMessages = [];
+        if (window.nodeRole === 'leader') {
+            renderLeaderInboxHistory();
+        } else {
+            renderLeaderChatHistory();
+        }
+    } catch (err) {
+        console.error("Error al limpiar chat:", err);
+    }
 }
 
 function renderLeaderChatHistory() {

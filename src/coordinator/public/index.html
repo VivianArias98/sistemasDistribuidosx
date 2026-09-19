@@ -240,11 +240,12 @@
 
                         <!-- Chat Principal del Líder -->
                         <div class="chat-main" style="flex:1; display:flex; flex-direction:column; background: var(--bg-1);">
-                            <div class="chat-header" style="border-bottom: 1px solid var(--border);">
+                            <div class="chat-header" style="border-bottom: 1px solid var(--border); justify-content: space-between;">
                                 <div style="display:flex; align-items:center; gap: 1rem;">
                                     <div class="chat-header-name" id="chat-leader-current-name">Selecciona un chat</div>
                                     <span class="badge" id="chat-leader-current-status" style="font-size:0.75rem; background: var(--green); color: white; padding: 4px 10px; border-radius: 20px; display:none;"></span>
                                 </div>
+                                <button class="btn btn-ghost btn-sm" id="btn-chat-leader-clear" style="color: var(--red);" onclick="clearChat()">🗑️ Limpiar Todo</button>
                             </div>
                             
                             <div class="chat-history" id="chat-leader-history" style="flex:1; padding: 1rem; overflow-y: auto;">
@@ -399,6 +400,7 @@
                                 <input type="url" id="chat-ngrok-url" class="input" style="flex:1;" placeholder="Ingresa la URL pública (ngrok) del líder..." onkeypress="if(event.key === 'Enter') connectToLeaderChat()">
                                 <button class="btn btn-primary" onclick="connectToLeaderChat()">Conectar 🚀</button>
                                 <button class="btn btn-ghost" id="btn-chat-disconnect" style="display:none;" onclick="disconnectLeaderChat()">✕ Desconectar</button>
+                                <button class="btn btn-ghost" id="btn-chat-clear" style="display:none; color: var(--red);" onclick="clearChat()">🗑️ Limpiar</button>
                             </div>
                             <div id="chat-connect-status" style="color: var(--text-3); font-size: 0.9rem; min-height: 1em;"></div>
                         </div>
@@ -499,6 +501,15 @@
             if (pOut) pOut.classList.toggle('active', isOutgoing);
             if (pMini) pMini.classList.toggle('active', isMiniserver);
             if (pChat) pChat.classList.toggle('active', isChat);
+
+            const tabsContainer = document.querySelector('.view-tabs-container');
+            if (tabsContainer) {
+                if (isIncoming || isOutgoing) {
+                    tabsContainer.style.display = 'flex';
+                } else {
+                    tabsContainer.style.display = 'none';
+                }
+            }
 
             // Botones de pestañas superiores (si existen)
             const btnIn = document.getElementById('tab-btn-incoming');
