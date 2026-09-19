@@ -63,6 +63,7 @@ router.post("/election/ping", (req, res) => {
 
     // Descubrimiento transitivo: incorporar peers del emisor
     if (url && isValidPeer(id)) {
+        engine.allowPeer(url); // Si el peer nos hace ping directo, significa que revivió: le permitimos reingresar
         const alreadyKnown = engine.knownPeers().some(p => p.url === url.replace(/\/$/, ""));
         engine.upsertPeer(id, url);
         // Auto-registrar en Naming Service SOLO si NO es el propio nodo
