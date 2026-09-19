@@ -9,6 +9,7 @@ const msgStore = require("../services/messages");
 const { engine } = require("../election/engine");
 const config   = require("../config");
 const logger   = require("../utils/logger");
+const eventsModule = require("../election/events");
 
 const router = express.Router();
 
@@ -410,6 +411,7 @@ router.post("/receive-message", (req, res) => {
     });
     
     logger.msg("Mensajería", `📥 Mensaje directo de '${entry.from}': "${message}"`);
+    eventsModule.emit("message", { entry });
     res.json({ success: true, receivedAt: entry.receivedAt });
 });
 
@@ -477,6 +479,7 @@ router.post("/api/send-message", async (req, res) => {
         entry.targetUrl = targetUrl;
         registry.addMessage(to, entry);
         logger.msg("Mensajería", `Mensaje de '${from}' entregado a '${to}' (${targetUrl})`);
+        eventsModule.emit("message", { entry });
         return res.json({ success: true, entry, destinationResponse: resp.data });
     } catch (err) {
         entry.status = "FALLIDO";
