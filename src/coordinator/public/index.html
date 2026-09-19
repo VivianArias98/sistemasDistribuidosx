@@ -354,33 +354,43 @@
                 <!-- ============================================================== -->
                 <div class="tab-panel" id="view-panel-chat">
                     <div class="chat-container">
-                        <!-- Panel Izquierdo: Contactos -->
-                        <div class="chat-sidebar">
-                            <div class="chat-sidebar-header">
-                                💬 Mis Contactos
+                        <!-- PASO 1: Formulario de conexión -->
+                        <div id="chat-connect-screen" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 2rem; gap: 1.5rem;">
+                            <span style="font-size: 3.5rem;">🔗</span>
+                            <h3 style="color: var(--text-1); margin:0; font-size: 1.3rem;">Conectar al Líder del Clúster</h3>
+                            <p style="color: var(--text-3); text-align: center; max-width: 400px; margin:0; line-height: 1.5;">
+                                Ingresa la URL pública (ngrok) a la que deseas conectarte. El sistema verificará si es el líder actual. Si no lo es, te redirigirá automáticamente al líder correcto.
+                            </p>
+                            <div style="display:flex; gap:0.75rem; width: 100%; max-width: 500px;">
+                                <input type="url" id="chat-ngrok-url" class="input" style="flex:1;" placeholder="https://example.ngrok-free.dev" onkeypress="if(event.key === 'Enter') connectToLeaderChat()">
+                                <button class="btn btn-primary" onclick="connectToLeaderChat()">Conectar 🚀</button>
                             </div>
-                            <div class="chat-contacts" id="chat-contacts-list">
-                                <div style="text-align:center; color:var(--text-3); margin-top:2rem;">Cargando red...</div>
-                            </div>
+                            <div id="chat-connect-status" style="color: var(--text-3); font-size: 0.9rem; min-height: 1.5em; text-align: center;"></div>
                         </div>
-                        
-                        <!-- Panel Derecho: Conversación -->
-                        <div class="chat-main">
-                            <div class="chat-header">
-                                <div class="chat-header-name" id="chat-current-name">Selecciona un contacto</div>
-                                <span class="badge" id="chat-current-status" style="display:none;"></span>
+
+                        <!-- PASO 2: Chat activo (oculto inicialmente) -->
+                        <div id="chat-active-screen" style="display:none; flex:1; flex-direction:column; width:100%;">
+                            <!-- Header del chat -->
+                            <div class="chat-header" style="flex-shrink:0;">
+                                <div style="display:flex; align-items:center; gap: 1rem;">
+                                    <div class="chat-header-name" id="chat-current-name">Líder</div>
+                                    <span class="badge" id="chat-current-status" style="font-size:0.75rem; background: rgba(16,217,133,0.15); color: var(--green); padding: 4px 10px; border-radius: 20px;"></span>
+                                </div>
+                                <button class="btn btn-ghost btn-sm" onclick="disconnectLeaderChat()">✕ Desconectar</button>
                             </div>
                             
+                            <!-- Historial de mensajes -->
                             <div class="chat-history" id="chat-history">
                                 <div class="chat-placeholder-msg">
-                                    <span style="font-size: 3rem;">👋</span>
-                                    <span>Selecciona un Worker o Peer a la izquierda para empezar a chatear.</span>
+                                    <span style="font-size: 2rem;">💬</span>
+                                    <span>Conectado. Escribe un mensaje para el líder.</span>
                                 </div>
                             </div>
                             
-                            <div class="chat-input-area">
-                                <input type="text" id="chat-dedicated-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje..." onkeypress="if(event.key === 'Enter') sendDedicatedMessage()" disabled>
-                                <button class="btn btn-primary" id="btn-chat-send" onclick="sendDedicatedMessage()" disabled>Enviar 💬</button>
+                            <!-- Input de mensaje -->
+                            <div class="chat-input-area" style="flex-shrink:0;">
+                                <input type="text" id="chat-dedicated-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje al líder..." onkeypress="if(event.key === 'Enter') sendDedicatedMessage()">
+                                <button class="btn btn-primary" id="btn-chat-send" onclick="sendDedicatedMessage()">Enviar 💬</button>
                             </div>
                         </div>
                     </div>
@@ -476,9 +486,8 @@
 
             try { localStorage.setItem('active_view_tab', tab); } catch(e){}
 
-            // Si se abre la pestaña de chat, cargar contactos y mensajes
+            // Si se abre la pestaña de chat, cargar mensajes
             if (isChat) {
-                if (typeof updateChatContacts === "function") updateChatContacts();
                 if (typeof loadMessages === "function") loadMessages();
             }
         }

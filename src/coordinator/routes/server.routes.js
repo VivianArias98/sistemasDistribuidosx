@@ -416,10 +416,43 @@ router.post("/receive-message", (req, res) => {
 });
 
 /**
+ * POST /api/verify-leader — Verifica si una URL dada es el líder, o redirige al líder real
+ */
+router.post("/api/verify-leader", async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: "Falta 'url'" });
+
+    try {
+        const endpoint = url.replace(/\/$/, "") + "/election/state";
+        const resp = await axios.get(endpoint, {
+            timeout: 5000,
+            headers: { "ngrok-skip-browser-warning": "true" }
+        });
+        
+        const state = resp.data;
+        if (!state) throw new Error("Respuesta inválida del nodo");
+
+        if (state.role === "leader") {
+            // La URL ingresada es el líder actual
+            return res.json({ isLeader: true, leaderUrl: url, leaderId: state.id });
+        } else if (state.leaderUrl) {
+            // El nodo sabe quién es el líder
+            return res.json({ isLeader: false, leaderUrl: state.leaderUrl, leaderId: state.leaderId });
+        } else {
+            // El nodo no es líder y no sabe quién es
+            return res.status(503).json({ error: "El nodo contactado no conoce a ningún líder actualmente." });
+        }
+    } catch (err) {
+        logger.error("VerifyLeader", `Error verificando URL ${url}: ${err.message}`);
+        return res.status(502).json({ error: "No se pudo contactar al nodo o no es un Coordinador válido." });
+    }
+});
+
+/**
  * POST /api/send-message — Enrutamiento nodo a nodo via Naming Service
  */
 router.post("/api/send-message", async (req, res) => {
-    const { from, to, message } = req.body;
+    const { from, to, message, directUrl } = req.body;
     if (!from || !to || !message) {
         return res.status(400).json({ error: "Se requieren 'from', 'to' y 'message'" });
     }
@@ -435,24 +468,30 @@ router.post("/api/send-message", async (req, res) => {
     let targetUrl = null;
     let targetStatus = "ACTIVO";
 
-    // 1. Buscar en Naming Service (Workers)
-    const workerTarget = registry.resolve(to);
-    if (workerTarget) {
-        targetUrl = workerTarget.url;
-        targetStatus = workerTarget.status;
+    if (directUrl) {
+        // Enrutamiento directo (Modo Chat Dedicado)
+        targetUrl = directUrl;
+        targetStatus = "ACTIVO";
     } else {
-        // 2. Buscar en el Engine (Otros Coordinadores)
-        const peer = engine.knownPeers().find(p => p.id === to || p.url === to);
-        if (peer) {
-            targetUrl = peer.url;
-            targetStatus = peer.alive ? "ACTIVO" : "CAIDO";
+        // 1. Buscar en Naming Service (Workers)
+        const workerTarget = registry.resolve(to);
+        if (workerTarget) {
+            targetUrl = workerTarget.url;
+            targetStatus = workerTarget.status;
         } else {
-            // 3. Búsqueda distribuida en Vecinos
-            const neighborResult = await resolveWithNeighbors(to);
-            if (neighborResult && neighborResult.url) {
-                targetUrl = neighborResult.url;
-                targetStatus = neighborResult.status;
-                logger.msg("Mensajería", `Destinatario '${to}' localizado en vecino (${neighborResult.via}) → ${targetUrl}`);
+            // 2. Buscar en el Engine (Otros Coordinadores)
+            const peer = engine.knownPeers().find(p => p.id === to || p.url === to);
+            if (peer) {
+                targetUrl = peer.url;
+                targetStatus = peer.alive ? "ACTIVO" : "CAIDO";
+            } else {
+                // 3. Búsqueda distribuida en Vecinos
+                const neighborResult = await resolveWithNeighbors(to);
+                if (neighborResult && neighborResult.url) {
+                    targetUrl = neighborResult.url;
+                    targetStatus = neighborResult.status;
+                    logger.msg("Mensajería", `Destinatario '${to}' localizado en vecino (${neighborResult.via}) → ${targetUrl}`);
+                }
             }
         }
     }

@@ -763,102 +763,102 @@ async function loadMessages() {
     } catch {}
 }
 
-// Global hook needed in switchViewTab
-window.updateChatContacts = function() {
-    const list = document.getElementById("chat-contacts-list");
-    if (!list) return;
+// ─── LÓGICA DEL CHAT DEDICADO AL LÍDER ───────────────────────────────────────────
+let currentLeaderContact = null; // { name, url }
 
-    const targets = [];
-    allWorkers.forEach(w => targets.push({ name: w.name, url: w.url, status: w.status, isPeer: false }));
-    allPeers.forEach(p => {
-        if (p.id && p.id !== "UNCONFIGURED") {
-            targets.push({ name: p.id, url: p.url, status: p.alive ? "ACTIVO" : "CAIDO", isPeer: true });
-        }
-    });
-
-    // También agregar contactos que aparezcan en mensajes pero no en peers/workers
-    allMessages.forEach(m => {
-        const myId = mySelfId || "Coordinador";
-        const otherName = (m.from === myId || m.from === "Coordinador") ? m.to : m.from;
-        if (otherName && otherName !== myId && otherName !== "Coordinador" && otherName !== "Todos") {
-            if (!targets.find(t => t.name === otherName)) {
-                targets.push({ name: otherName, url: m.targetUrl || "", status: "ACTIVO", isPeer: true });
+async function loadMessages() {
+    try {
+        const r = await fetch("/api/messages");
+        if (r.ok) {
+            allMessages = await r.json();
+            if (currentLeaderContact) {
+                renderLeaderChatHistory();
             }
         }
-    });
+    } catch {}
+}
 
-    // Eliminar duplicados
-    const unique = [];
-    const seen = new Set();
-    targets.forEach(t => {
-        if (!seen.has(t.name)) {
-            seen.add(t.name);
-            unique.push(t);
-        }
-    });
-
-    if (unique.length === 0) {
-        list.innerHTML = '<div style="text-align:center; color:var(--text-3); padding:1rem;">Nadie conectado aún.</div>';
+async function connectToLeaderChat() {
+    const inputUrl = document.getElementById("chat-ngrok-url").value.trim();
+    const statusDiv = document.getElementById("chat-connect-status");
+    
+    if (!inputUrl) {
+        statusDiv.innerHTML = '<span style="color:var(--red);">⚠️ Ingresa una URL válida</span>';
         return;
     }
 
-    list.innerHTML = unique.map(t => {
-        const isActive = window.currentChatContact === t.name;
-        const color = t.status === "ACTIVO" ? "var(--green)" : "var(--red)";
-        const dot = t.status === "ACTIVO" ? "🟢" : "🔴";
-        return `
-            <div class="chat-contact ${isActive ? 'active' : ''}" onclick="selectChatContact('${escHtml(t.name)}', '${escHtml(t.url)}')">
-                <div class="chat-contact-name">
-                    ${escHtml(t.name)}
-                    <span style="font-size: 0.8rem;">${t.isPeer ? '👑' : '🤖'}</span>
-                </div>
-                <div class="chat-contact-status" style="color: ${color}">${dot} ${t.status}</div>
-            </div>
-        `;
-    }).join("");
+    statusDiv.innerHTML = '⏳ Verificando liderazgo...';
+    document.getElementById("chat-ngrok-url").disabled = true;
+
+    try {
+        const r = await fetch("/api/verify-leader", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: inputUrl })
+        });
+        
+        const data = await r.json();
+        
+        if (r.ok) {
+            let finalUrl = data.leaderUrl;
+            let finalId = data.leaderId || "Líder";
+            
+            if (!data.isLeader) {
+                statusDiv.innerHTML = '🔀 Redirigiendo al líder real...';
+                await new Promise(res => setTimeout(res, 1000));
+            }
+            
+            currentLeaderContact = { name: finalId, url: finalUrl };
+            
+            // Ocultar pantalla de conexión y mostrar chat
+            document.getElementById("chat-connect-screen").style.display = "none";
+            document.getElementById("chat-active-screen").style.display = "flex";
+            
+            document.getElementById("chat-current-name").textContent = finalId;
+            const statusBadge = document.getElementById("chat-current-status");
+            statusBadge.style.display = "inline-block";
+            statusBadge.textContent = finalUrl;
+            
+            loadMessages();
+            
+        } else {
+            statusDiv.innerHTML = `<span style="color:var(--red);">❌ Error: ${data.error}</span>`;
+        }
+    } catch (err) {
+        statusDiv.innerHTML = `<span style="color:var(--red);">❌ Error de red: ${err.message}</span>`;
+    } finally {
+        document.getElementById("chat-ngrok-url").disabled = false;
+    }
 }
 
-window.selectChatContact = function(name, url) {
-    window.currentChatContact = name;
-    window.currentChatContactUrl = url;
-    document.getElementById("chat-current-name").textContent = name;
-    
-    const statusBadge = document.getElementById("chat-current-status");
-    statusBadge.style.display = "inline-block";
-    statusBadge.textContent = url;
-    
-    document.getElementById("chat-dedicated-input").disabled = false;
-    document.getElementById("btn-chat-send").disabled = false;
-    
-    window.updateChatContacts(); // Re-render to highlight active
-    renderChatHistory(name);
+function disconnectLeaderChat() {
+    currentLeaderContact = null;
+    document.getElementById("chat-active-screen").style.display = "none";
+    document.getElementById("chat-connect-screen").style.display = "flex";
+    document.getElementById("chat-connect-status").innerHTML = "";
+    document.getElementById("chat-ngrok-url").value = "";
 }
 
-function renderChatHistory(contactName) {
+function renderLeaderChatHistory() {
     const historyDiv = document.getElementById("chat-history");
-    if (!historyDiv) return;
+    if (!historyDiv || !currentLeaderContact) return;
     
     const myId = mySelfId || "Coordinador";
-    const contactUrl = window.currentChatContactUrl || "";
+    const contactUrl = currentLeaderContact.url;
 
-    // Buscar TODOS los nombres asociados a esta URL (peer puede ser "z" pero mensajes dicen "Coordinador-592")
-    const contactNames = new Set([contactName]);
-    // Buscar si algún peer tiene la misma URL
-    allPeers.forEach(p => {
-        if (p.url === contactUrl && p.id) contactNames.add(p.id);
-    });
-    // Buscar en mensajes por targetUrl
+    // Buscar TODOS los nombres asociados a esta URL en los mensajes
+    const contactNames = new Set([currentLeaderContact.name]);
+    allPeers.forEach(p => { if (p.url === contactUrl && p.id) contactNames.add(p.id); });
     allMessages.forEach(m => {
         if (m.targetUrl === contactUrl) {
             contactNames.add(m.to);
             contactNames.add(m.from);
         }
     });
-    // Remover nuestro propio ID
     contactNames.delete(myId);
     contactNames.delete("Coordinador");
     
-    // Filtrar mensajes que involucren a cualquier nombre de este contacto
+    // Filtrar mensajes que involucren al líder
     const msgs = allMessages.filter(m => {
         const matchesFrom = contactNames.has(m.from);
         const matchesTo = contactNames.has(m.to);
@@ -870,7 +870,7 @@ function renderChatHistory(contactName) {
         historyDiv.innerHTML = `
             <div class="chat-placeholder-msg">
                 <span style="font-size: 2rem;">💬</span>
-                <span>No hay mensajes con ${escHtml(contactName)}</span>
+                <span>Conectado al Líder. No hay mensajes aún.</span>
             </div>
         `;
         return;
@@ -880,7 +880,7 @@ function renderChatHistory(contactName) {
         const isMine = m.from === myId || m.from === "Coordinador" || m.from.startsWith(myId);
         const time = m.receivedAt || new Date(m.timestamp || Date.now()).toLocaleTimeString("es-MX", { hour12: false });
         const alignmentClass = isMine ? "mine" : "theirs";
-        const senderLabel = isMine ? "" : `<div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">📩 ${escHtml(m.from)}</div>`;
+        const senderLabel = isMine ? "" : `<div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">👑 Líder (${escHtml(m.from)})</div>`;
         
         return `
             <div class="chat-bubble-wrapper ${alignmentClass}">
@@ -893,35 +893,31 @@ function renderChatHistory(contactName) {
         `;
     }).join("");
     
-    // Scroll al final
     historyDiv.scrollTop = historyDiv.scrollHeight;
 }
 
 window.appendChatBubble = function(ev) {
-    // Siempre recargar mensajes cuando llega un evento de mensaje
-    loadMessages();
+    if (currentLeaderContact) loadMessages();
 }
 
 async function sendDedicatedMessage() {
     const input = document.getElementById("chat-dedicated-input");
-    const target = window.currentChatContact;
-    if (!target || !input) return;
+    if (!currentLeaderContact || !input) return;
 
     const msg = input.value.trim();
     if (!msg) return;
 
-    input.value = ""; // Clear quickly for UX
+    input.value = ""; 
     
     try {
         const myId = mySelfId || "Coordinador";
         const r = await fetch("/api/send-message", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ from: myId, to: target, message: msg })
+            body: JSON.stringify({ from: myId, to: currentLeaderContact.name, message: msg, directUrl: currentLeaderContact.url })
         });
         
         if (r.ok) {
-            // Recargar mensajes inmediatamente
             await loadMessages();
         } else {
             const data = await r.json();
@@ -935,14 +931,12 @@ async function sendDedicatedMessage() {
 // ─── Init ──────────────────────────────────────────────────
 connectSSE();
 loadNodeState().then(() => {
-    // Cargar mensajes iniciales después de tener el selfId
     loadMessages();
 });
 loadAll();
 setInterval(() => { loadNodeState(); loadAll(); }, POLL_INTERVAL);
-// Recargar mensajes periódicamente si la pestaña de chat está activa
 setInterval(() => {
-    if (document.getElementById("view-panel-chat")?.classList.contains("active")) {
+    if (document.getElementById("view-panel-chat")?.classList.contains("active") && currentLeaderContact) {
         loadMessages();
     }
 }, 3000);
