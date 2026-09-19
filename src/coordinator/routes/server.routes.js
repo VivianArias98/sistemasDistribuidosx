@@ -396,6 +396,24 @@ router.post("/send-message/:name", ensureLeader, (req, res) => {
 });
 
 /**
+ * POST /receive-message — Para recibir mensajes de otros nodos (Coordinadores o Workers)
+ */
+router.post("/receive-message", (req, res) => {
+    const { from, to, message, timestamp } = req.body;
+    if (!message) return res.status(400).json({ error: "Falta 'message'" });
+    
+    const entry = msgStore.add({ 
+        from: from || "Desconocido", 
+        to: to || "Coordinador", 
+        message, 
+        status: "ENTREGADO" 
+    });
+    
+    logger.msg("Mensajería", `📥 Mensaje directo de '${entry.from}': "${message}"`);
+    res.json({ success: true, receivedAt: entry.receivedAt });
+});
+
+/**
  * POST /api/send-message — Enrutamiento nodo a nodo via Naming Service
  */
 router.post("/api/send-message", async (req, res) => {
