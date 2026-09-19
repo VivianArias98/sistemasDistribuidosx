@@ -917,6 +917,14 @@ function renderLeaderInbox() {
         if (leaderNames.has(m.to)) uniqueContacts.add(m.from);
         if (leaderNames.has(m.from)) uniqueContacts.add(m.to);
     });
+    // Añadir también a los workers y peers conectados actualmente
+    if (typeof allWorkers !== 'undefined') {
+        allWorkers.forEach(w => { if (w.status === "ACTIVO" && w.name) uniqueContacts.add(w.name); });
+    }
+    if (typeof allPeers !== 'undefined') {
+        allPeers.forEach(p => { if (p.alive && p.id) uniqueContacts.add(p.id); });
+    }
+    
     // Eliminar los nombres del propio líder de la lista de contactos
     leaderNames.forEach(n => uniqueContacts.delete(n));
 
