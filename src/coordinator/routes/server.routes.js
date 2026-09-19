@@ -535,6 +535,14 @@ router.get(["/messages", "/api/messages"], (req, res) => {
     res.json(msgStore.getAll(limit));
 });
 
+/**
+ * DELETE /api/messages — Borra el historial de mensajes
+ */
+router.delete("/api/messages", (req, res) => {
+    msgStore.clear();
+    res.json({ success: true, message: "Historial de mensajes limpiado" });
+});
+
 // ─── HOTRELOAD ────────────────────────────────────────────────────────────────
 
 router.post(["/hotreload/:name", "/servers/:name/url"], (req, res) => {

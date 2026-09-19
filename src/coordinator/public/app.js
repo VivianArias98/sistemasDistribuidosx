@@ -169,6 +169,9 @@ async function loadNodeState() {
         if (currentLeader && currentLeader !== window.lastKnownLeaderId) {
             if (window.lastKnownLeaderId !== null && window.lastKnownLeaderId !== "Líder") {
                 // El líder cambió
+                // Resetear el historial de mensajes del backend (ya que era del líder anterior)
+                fetch('/api/messages', { method: 'DELETE' }).catch(console.error);
+
                 if (typeof window.localSystemMessages !== "undefined") {
                     window.localSystemMessages.push({
                         id: "sys_" + Date.now(),
