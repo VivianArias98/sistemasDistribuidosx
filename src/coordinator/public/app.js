@@ -136,6 +136,7 @@ async function loadNodeState() {
 
         // Header info
         if (data.id && data.id !== "UNCONFIGURED") mySelfId = data.id;
+        window.nodeRole = data.role;
         if ($("hdr-node-id")) $("hdr-node-id").textContent = `🆔 Mi Nodo: ${data.id}`;
         const roleLabels = { leader: "👑 Líder", follower: "📡 Seguidor", candidate: "🗳️ Candidato" };
         if ($("hdr-role")) $("hdr-role").textContent = roleLabels[data.role] || data.role;
@@ -771,7 +772,9 @@ async function loadMessages() {
         const r = await fetch("/api/messages");
         if (r.ok) {
             allMessages = await r.json();
-            if (currentLeaderContact) {
+            if (window.nodeRole === 'leader') {
+                renderLeaderInbox();
+            } else if (currentLeaderContact) {
                 renderLeaderChatHistory();
             }
         }
@@ -896,8 +899,136 @@ function renderLeaderChatHistory() {
     historyDiv.scrollTop = historyDiv.scrollHeight;
 }
 
+let currentLeaderChatContact = null; // Guardará el ID del contacto seleccionado por el líder
+
+function renderLeaderInbox() {
+    const listDiv = document.getElementById("chat-leader-contact-list");
+    const historyDiv = document.getElementById("chat-leader-history");
+    if (!listDiv || !historyDiv) return;
+
+    const myId = mySelfId || "Coordinador";
+    
+    // 1. Obtener todos los contactos con los que hay mensajes (entrantes o salientes)
+    // El líder está involucrado si (from === myId/Coordinador/Líder) o (to === myId/Coordinador/Líder/Todos)
+    const leaderNames = new Set([myId, "Coordinador", "Líder", "Todos"]);
+    
+    const uniqueContacts = new Set();
+    allMessages.forEach(m => {
+        if (leaderNames.has(m.to)) uniqueContacts.add(m.from);
+        if (leaderNames.has(m.from)) uniqueContacts.add(m.to);
+    });
+    // Eliminar los nombres del propio líder de la lista de contactos
+    leaderNames.forEach(n => uniqueContacts.delete(n));
+
+    // Convertir a array para renderizar la barra lateral
+    const contacts = Array.from(uniqueContacts).sort();
+
+    if (contacts.length === 0) {
+        listDiv.innerHTML = `<div style="padding: 1rem; text-align: center; color: var(--text-3); font-size: 0.9rem;">No hay mensajes aún.</div>`;
+    } else {
+        listDiv.innerHTML = contacts.map(c => {
+            const isSelected = (currentLeaderChatContact === c);
+            return `
+                <div class="contact-item ${isSelected ? 'active' : ''}" onclick="selectLeaderContact('${escHtml(c)}')">
+                    <span style="font-size: 1.2rem;">👤</span>
+                    <span style="font-weight: 500;">${escHtml(c)}</span>
+                </div>
+            `;
+        }).join("");
+    }
+
+    // 2. Renderizar historial del contacto seleccionado
+    if (!currentLeaderChatContact) {
+        historyDiv.innerHTML = `
+            <div class="chat-placeholder-msg">
+                <span style="font-size: 2rem;">📥</span>
+                <span>Selecciona un contacto a la izquierda para ver la conversación y responder.</span>
+            </div>
+        `;
+        document.getElementById("chat-leader-input").disabled = true;
+        document.getElementById("btn-leader-send").disabled = true;
+        document.getElementById("chat-leader-current-name").textContent = "Selecciona un chat";
+        return;
+    }
+
+    document.getElementById("chat-leader-input").disabled = false;
+    document.getElementById("btn-leader-send").disabled = false;
+    document.getElementById("chat-leader-current-name").textContent = currentLeaderChatContact;
+
+    // Filtrar los mensajes de la conversación con el contacto seleccionado
+    const msgs = allMessages.filter(m => {
+        const isWithContact = (m.from === currentLeaderChatContact || m.to === currentLeaderChatContact);
+        const isWithLeader = (leaderNames.has(m.from) || leaderNames.has(m.to));
+        return isWithContact && isWithLeader;
+    }).reverse();
+
+    if (msgs.length === 0) {
+        historyDiv.innerHTML = `<div class="chat-placeholder-msg"><span>No hay mensajes con ${escHtml(currentLeaderChatContact)}</span></div>`;
+        return;
+    }
+
+    historyDiv.innerHTML = msgs.map(m => {
+        const isMine = leaderNames.has(m.from);
+        const alignmentClass = isMine ? "mine" : "theirs";
+        const time = m.receivedAt || new Date(m.timestamp || Date.now()).toLocaleTimeString("es-MX", { hour12: false });
+        
+        return `
+            <div class="chat-bubble-wrapper ${alignmentClass}" style="margin-bottom:0.5rem;">
+                <div class="chat-bubble">
+                    ${escHtml(m.message)}
+                </div>
+                <span class="chat-time">${time}</span>
+            </div>
+        `;
+    }).join("");
+    
+    historyDiv.scrollTop = historyDiv.scrollHeight;
+}
+
+window.selectLeaderContact = function(contactId) {
+    currentLeaderChatContact = contactId;
+    renderLeaderInbox();
+};
+
+async function sendLeaderMessage() {
+    const input = document.getElementById("chat-leader-input");
+    if (!currentLeaderChatContact || !input) return;
+
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    input.value = ""; 
+    const myId = mySelfId || "Coordinador";
+    
+    // Deshabilitar input temporalmente
+    input.disabled = true;
+    document.getElementById("btn-leader-send").disabled = true;
+
+    try {
+        const r = await fetch("/api/send-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Enviamos el mensaje sin directUrl, para que el backend lo enrute usando el Naming Service o Engine
+            body: JSON.stringify({ from: myId, to: currentLeaderChatContact, message: msg })
+        });
+        
+        if (r.ok) {
+            await loadMessages();
+        } else {
+            const err = await r.json();
+            showToast("Error al enviar: " + (err.error || "Desconocido"), "error");
+        }
+    } catch (err) {
+        showToast("Error de red: " + err.message, "error");
+    } finally {
+        input.disabled = false;
+        document.getElementById("btn-leader-send").disabled = false;
+        input.focus();
+    }
+}
+
 window.appendChatBubble = function(ev) {
-    if (currentLeaderContact) loadMessages();
+    if (currentLeaderContact || window.nodeRole === 'leader') loadMessages();
 }
 
 async function sendDedicatedMessage() {
@@ -936,7 +1067,9 @@ loadNodeState().then(() => {
 loadAll();
 setInterval(() => { loadNodeState(); loadAll(); }, POLL_INTERVAL);
 setInterval(() => {
-    if (document.getElementById("view-panel-chat")?.classList.contains("active") && currentLeaderContact) {
-        loadMessages();
+    if (document.getElementById("view-panel-chat")?.classList.contains("active")) {
+        if (currentLeaderContact || window.nodeRole === 'leader') {
+            loadMessages();
+        }
     }
 }, 3000);
