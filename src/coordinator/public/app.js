@@ -846,6 +846,7 @@ async function connectToLeaderChat() {
                 statusDiv.innerHTML = '🔀 Redirigiendo al líder real...';
                 await new Promise(res => setTimeout(res, 1000));
             }
+            statusDiv.innerHTML = '<span style="color:var(--green);">✅ Conectado al Líder</span>';
             
             currentLeaderContact = { name: finalId, url: finalUrl };
             
