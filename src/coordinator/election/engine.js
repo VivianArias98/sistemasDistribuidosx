@@ -402,6 +402,7 @@ async function _tick() {
             if (peer.alive && (isHardFailure || elapsed > engine.timing.suspect)) {
                 // En lugar de poner alive: false, eliminamos el peer inmediatamente
                 peers.delete(url);
+                disconnectedPeers.add(url); // Añadir a la lista de desconectados para evitar que otros nodos nos lo vuelvan a inyectar (efecto fantasma)
 
                 if (isHardFailure) {
                     logger.timeout(engine.selfId, `Peer CAÍDO INSTANTÁNEAMENTE (Fallo de Red/Ngrok apagado): ${peer.id} (${url})`);
