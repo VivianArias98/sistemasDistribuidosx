@@ -458,7 +458,7 @@ router.post("/api/send-message", async (req, res) => {
         entry.status    = "ENTREGADO";
         entry.targetUrl = targetUrl;
         registry.addMessage(to, entry);
-        logger.msg("Mensajería", `Mensaje de '${from}' entregado a '${to}' (${target.url})`);
+        logger.msg("Mensajería", `Mensaje de '${from}' entregado a '${to}' (${targetUrl})`);
         return res.json({ success: true, entry, destinationResponse: resp.data });
     } catch (err) {
         entry.status = "FALLIDO";

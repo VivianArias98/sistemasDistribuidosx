@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const os = require("os");
+const readline = require("readline");
 
 const app = express();
 app.use(express.json());
@@ -30,6 +31,8 @@ let MIDDLEWARE_URL = process.argv[5] || process.env.MIDDLEWARE_URL || "http://lo
 let pulseInterval = null;
 let isPulseActive = true;
 let receivedMessages = [];
+let knownPeers = []; // Para failover si el líder cae
+
 
 // -----------------------------------------------------------------------------
 // RUTAS BÁSICAS
@@ -250,7 +253,10 @@ app.post("/start-pulse", (req, res) => {
 // REGISTRO EN EL SERVICIO DE NOMBRES Y BUCLE DE PULSOS
 // -----------------------------------------------------------------------------
 
-async function register() {
+async function register(retryCount = 0) {
+    if (retryCount > 3) {
+        throw new Error("Demasiados intentos de redirección o reintento de registro.");
+    }
     try {
         const response = await axios.post(`${MIDDLEWARE_URL}/register`, {
             name: NAME,
@@ -259,18 +265,26 @@ async function register() {
             hostname: os.hostname()
         });
 
-        console.log(`✅ [REGISTRO] Registrado exitosamente en Servicio de Nombres como '${NAME}' (${MY_URL})`);
+        console.log(`✅ [REGISTRO] Registrado exitosamente en el Líder como '${NAME}' (${MY_URL})`);
         return response.data;
     } catch (error) {
         if (error.response && error.response.status === 409) {
-            console.error("=========================================================");
-            console.error(`❌ [ERROR 409 - CONFLICTO DE NOMBRES]`);
-            console.error(`   ${error.response.data.error}`);
-            console.error(`   Robutez en el Naming Service: NO se permiten nombres duplicados.`);
-            console.error("=========================================================");
-        } else {
-            console.error(`❌ [ERROR AL REGISTRAR] en ${MIDDLEWARE_URL}:`, error.response?.data?.error || error.message);
+            const data = error.response.data;
+            if (data.leader) {
+                console.log(`🔀 [REDIRECCIÓN] Este nodo no es el líder. El líder es: ${data.leader}. Redirigiendo...`);
+                MIDDLEWARE_URL = data.leader.replace(/\/$/, "");
+                if (data.peers && Array.isArray(data.peers)) knownPeers = data.peers;
+                return await register(retryCount + 1); // Intentar con el nuevo líder
+            } else if (data.code === "IP_CONFLICT" || data.error?.includes("duplicado")) {
+                console.error("=========================================================");
+                console.error(`❌ [ERROR 409 - CONFLICTO DE NOMBRES]`);
+                console.error(`   ${data.error}`);
+                console.error("=========================================================");
+                throw error;
+            }
         }
+        
+        console.error(`❌ [ERROR AL REGISTRAR] en ${MIDDLEWARE_URL}:`, error.response?.data?.error || error.message);
         throw error;
     }
 }
@@ -284,17 +298,64 @@ function startHeartbeatLoop() {
     pulseInterval = setInterval(async () => {
         if (!isPulseActive) return;
         try {
-            await axios.post(`${MIDDLEWARE_URL}/pulse/${NAME}`);
-            // console.log(`💓 Pulso enviado a ${MIDDLEWARE_URL}`);
+            const resp = await axios.post(`${MIDDLEWARE_URL}/pulse/${NAME}`);
+            // Actualizar lista de peers conocidos para failover
+            if (resp.data && resp.data.peers) {
+                knownPeers = resp.data.peers;
+            }
         } catch (error) {
-            if (error.response?.data?.mustRegister) {
-                console.log("ℹ️ Re-registrando en el Servicio de Nombres...");
+            if (error.response?.status === 409 && error.response?.data?.leader) {
+                console.log(`🔀 [REDIRECCIÓN] El líder cambió a: ${error.response.data.leader}. Reconectando...`);
+                MIDDLEWARE_URL = error.response.data.leader.replace(/\/$/, "");
+                try { await register(); } catch (e) {}
+            } else if (error.response?.data?.mustRegister) {
+                console.log("ℹ️ Re-registrando en el Servicio de Nombres (me eliminaron)...");
                 try { await register(); } catch (e) {}
             } else {
                 console.log(`⚠️ Error al enviar pulso al middleware: ${error.message}`);
+                // Si hay un error de conexión (el líder cayó), intentar con un follower
+                if (!error.response && knownPeers.length > 0) {
+                    console.log("🔄 El líder parece estar caído. Buscando un nuevo líder entre los peers conocidos...");
+                    // Elegir un peer aleatorio distinto al actual
+                    const availablePeers = knownPeers.filter(p => p !== MIDDLEWARE_URL);
+                    if (availablePeers.length > 0) {
+                        const nextPeer = availablePeers[Math.floor(Math.random() * availablePeers.length)];
+                        MIDDLEWARE_URL = nextPeer.replace(/\/$/, "");
+                        console.log(`🔌 Conectando al peer de respaldo: ${MIDDLEWARE_URL} ...`);
+                        try { await register(); } catch (e) {}
+                    }
+                }
             }
         }
     }, 5000);
+}
+
+// -----------------------------------------------------------------------------
+// CHAT INTERACTIVO (Consola)
+// -----------------------------------------------------------------------------
+function startInteractiveChat() {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        prompt: `💬 Escribe al líder (Enter para enviar) > `
+    });
+
+    console.log("\n💬 ¡Modo chat activado! Escribe un mensaje y presiona Enter para enviarlo al líder actual.");
+    rl.prompt();
+
+    rl.on("line", async (line) => {
+        const msg = line.trim();
+        if (msg) {
+            try {
+                // Se envía al middleware actual (líder)
+                await axios.post(`${MIDDLEWARE_URL}/send-message/${NAME}`, { message: msg });
+                console.log(`📤 Enviado al líder: "${msg}"`);
+            } catch (error) {
+                console.log(`❌ Error al enviar mensaje: ${error.message}`);
+            }
+        }
+        rl.prompt();
+    });
 }
 
 // -----------------------------------------------------------------------------
@@ -314,7 +375,9 @@ app.listen(PORT, async () => {
     try {
         await register();
         startHeartbeatLoop();
+        startInteractiveChat();
     } catch (error) {
         console.log("💡 Para reintentar el registro o cambiar el nombre, use el endpoint /hotreload o reinicie el nodo.");
+        startInteractiveChat(); // Permitir chat aunque no esté registrado (intentará enviarlo)
     }
 });

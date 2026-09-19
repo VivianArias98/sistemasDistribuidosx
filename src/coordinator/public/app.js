@@ -90,7 +90,15 @@ function appendLog(ev) {
     const icon = icons[ev.type] || "•";
     const t = ev.ts ? timeStr(ev.ts) : new Date().toLocaleTimeString("es-MX", { hour12: false });
     const label = ev.type || "event";
-    const msg   = ev.message || JSON.stringify(ev);
+    
+    let msg = ev.message;
+    if (!msg) {
+        if (ev.type === "connected" && ev.state) {
+            msg = `Clúster sincronizado. Rol local: <b>${ev.state.role}</b> | Líder actual: <b>${ev.state.leader || 'Ninguno'}</b>`;
+        } else {
+            msg = `<span style="font-family: monospace; color: var(--text-3); font-size: 0.9em;">${JSON.stringify(ev)}</span>`;
+        }
+    }
 
     const el = document.createElement("div");
     el.className = "log-entry";
@@ -439,6 +447,42 @@ async function connectToPeer(url) {
         }
     } catch (err) {
         showToast(`❌ Error: ${err.message}`, "error");
+    }
+}
+
+// ─── Enviar Mensaje desde el Chat UI ────────────────────────
+async function sendChatMessage() {
+    const targetSelect = document.getElementById("msg-to");
+    const input = document.getElementById("chat-input");
+    if (!targetSelect || !input) return;
+
+    const target = targetSelect.value;
+    const msg = input.value.trim();
+
+    if (!target) {
+        showToast("Por favor selecciona un destinatario.", "info");
+        return;
+    }
+    if (!msg) return;
+
+    try {
+        const myId = document.getElementById("my-node-id")?.value || "Coordinador";
+        const r = await fetch("/api/send-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ from: myId, to: target, message: msg })
+        });
+        
+        if (r.ok) {
+            input.value = "";
+            showToast(`Mensaje enviado a ${target}`, "success");
+            // Se asume que el SSE event-stream o la respuesta agregará el evento a la UI
+        } else {
+            const data = await r.json();
+            showToast(`Error al enviar: ${data.error}`, "error");
+        }
+    } catch (err) {
+        showToast(`Error de red: ${err.message}`, "error");
     }
 }
 

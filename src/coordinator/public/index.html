@@ -45,6 +45,9 @@
                 <button class="nav-item" onclick="openConnectModal()">
                     <span style="font-size: 1.1rem;">🔌</span> Conectar a Otro
                 </button>
+                <button class="nav-item" id="nav-item-miniserver" onclick="switchViewTab('miniserver')">
+                    <span style="font-size: 1.1rem;">🤖</span> Casos miniServer
+                </button>
             </nav>
         </aside>
 
@@ -272,18 +275,68 @@
                 </section>
 
                 <!-- ============================================================== -->
-                <!-- SECCIÓN COMÚN: OBSERVABILIDAD EN VIVO (Abajo)                    -->
+                <!-- PESTAÑA 3: CASOS MINISERVER (Tolerancia a fallos y redirección)  -->
+                <!-- ============================================================== -->
+                <div class="tab-panel" id="view-panel-miniserver">
+                    <section class="card full-width-card" style="margin-top: 0.5rem; background: linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.9));">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <span class="card-icon">🤖</span>
+                                <span>Simulación de Casos miniServer (Worker)</span>
+                            </div>
+                        </div>
+                        <div style="padding: 1rem; font-size: 0.95rem; line-height: 1.6; color: var(--text-2);">
+                            <p>El archivo <code>miniServer.js</code> ha sido mejorado para soportar <strong>Redirección al Líder</strong> y <strong>Recuperación de Fallos (Failover)</strong>. Aquí te explicamos cómo probar los escenarios principales.</p>
+                            
+                            <div style="margin-top: 1.5rem; border-left: 4px solid var(--primary); padding-left: 1rem;">
+                                <h3 style="color: var(--text-1); margin-bottom: 0.5rem;">Caso 1: El trabajador se conecta al líder</h3>
+                                <p>Simplemente inicia el miniServer apuntando a la URL de este middleware (que asumes que es el líder). El trabajador se registrará y enviará pulsos correctamente.</p>
+                                <pre style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 6px; color: var(--green); margin-top: 0.5rem; font-family: monospace;">node miniServer.js 4001 Worker1 http://localhost:4001 &lt;TU_URL_DE_NGROK&gt;</pre>
+                            </div>
+
+                            <div style="margin-top: 1.5rem; border-left: 4px solid var(--purple); padding-left: 1rem;">
+                                <h3 style="color: var(--text-1); margin-bottom: 0.5rem;">Caso 2: El trabajador se conecta a un seguidor y es redirigido al líder</h3>
+                                <p>Inicia el miniServer apuntando intencionalmente a la URL de un nodo <strong>Seguidor</strong> (Follower). El seguidor rechazará el registro con un código <code>409 Conflict</code> y le indicará quién es el verdadero líder. El miniServer interceptará esto y se redirigirá automáticamente al líder correcto.</p>
+                                <pre style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 6px; color: var(--green); margin-top: 0.5rem; font-family: monospace;">node miniServer.js 4002 Worker2 http://localhost:4002 &lt;URL_NGROK_DE_UN_SEGUIDOR&gt;</pre>
+                            </div>
+
+                            <div style="margin-top: 1.5rem; border-left: 4px solid var(--red); padding-left: 1rem;">
+                                <h3 style="color: var(--text-1); margin-bottom: 0.5rem;">Caso 3: El líder cae y el trabajador se reconecta al nuevo líder</h3>
+                                <p>Una vez que el miniServer está conectado al líder actual, desconecta o simula la caída de ese líder usando el botón <span style="background: rgba(239,68,68,0.2); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">🔌 Desconectar mi Nodo</span> en la parte superior derecha.</p>
+                                <ul style="margin-top: 0.5rem; list-style: disc; margin-left: 1.5rem;">
+                                    <li>El clúster hará una elección y escogerá un nuevo líder.</li>
+                                    <li>El miniServer detectará que sus pings fallan (o reciben un error del servidor caído).</li>
+                                    <li>Automáticamente, el miniServer revisará su lista interna de peers conocidos, escogerá uno al azar e intentará registrarse allí.</li>
+                                    <li>Si ese peer resulta ser el nuevo líder, lo aceptará. Si es un seguidor, se ejecutará el <strong>Caso 2</strong> y lo redirigirá al nuevo líder definitivo.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ============================================================== -->
+                <!-- SECCIÓN COMÚN: OBSERVABILIDAD EN VIVO Y MENSAJERÍA DIRECTA     -->
                 <!-- ============================================================== -->
                 <section class="card full-width-card" id="section-observability" style="margin-top: 0.5rem;">
                     <div class="card-header">
                         <div class="card-title">
                             <span class="card-icon">📡</span>
-                            <span>Consola de Observabilidad &amp; Eventos del Clúster en Vivo</span>
+                            <span>Observabilidad &amp; Chat Directo (Eventos en Vivo)</span>
                             <span class="badge badge-live">EN VIVO</span>
                         </div>
-                        <button class="btn btn-ghost btn-sm" onclick="clearLogs()">✕ Limpiar</button>
+                        <button class="btn btn-ghost btn-sm" onclick="clearLogs()">✕ Limpiar Logs</button>
                     </div>
-                    <div class="terminal" id="log-terminal" style="max-height: 250px;">
+
+                    <!-- CHAT BAR PARA ENVIAR MENSAJES -->
+                    <div class="chat-bar" style="padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 0.75rem; align-items: center; background: rgba(0,0,0,0.15);">
+                        <select id="msg-to" class="input" style="width: 220px; font-weight: 500;">
+                            <option value="Todos" selected>🌐 Transmitir a todos (Broadcast)</option>
+                        </select>
+                        <input type="text" id="chat-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje para los workers/peers..." onkeypress="if(event.key === 'Enter') sendChatMessage()">
+                        <button class="btn btn-primary" onclick="sendChatMessage()" style="padding: 0.5rem 1.25rem;">Enviar 💬</button>
+                    </div>
+
+                    <div class="terminal" id="log-terminal" style="max-height: 250px; border-top-left-radius: 0; border-top-right-radius: 0;">
                         <div class="terminal-placeholder">Conectando a stream de eventos en vivo...</div>
                     </div>
                 </section>
@@ -326,24 +379,30 @@
     <script>
         function switchViewTab(tab) {
             const isIncoming = (tab === 'incoming');
+            const isOutgoing = (tab === 'outgoing');
+            const isMiniserver = (tab === 'miniserver');
 
             // Paneles
             const pIn = document.getElementById('view-panel-incoming');
             const pOut = document.getElementById('view-panel-outgoing');
+            const pMini = document.getElementById('view-panel-miniserver');
             if (pIn) pIn.classList.toggle('active', isIncoming);
-            if (pOut) pOut.classList.toggle('active', !isIncoming);
+            if (pOut) pOut.classList.toggle('active', isOutgoing);
+            if (pMini) pMini.classList.toggle('active', isMiniserver);
 
-            // Botones de pestañas superiores
+            // Botones de pestañas superiores (si existen)
             const btnIn = document.getElementById('tab-btn-incoming');
             const btnOut = document.getElementById('tab-btn-outgoing');
             if (btnIn) btnIn.classList.toggle('active', isIncoming);
-            if (btnOut) btnOut.classList.toggle('active', !isIncoming);
+            if (btnOut) btnOut.classList.toggle('active', isOutgoing);
 
             // Botones del sidebar
             const navIn = document.getElementById('nav-item-incoming');
             const navOut = document.getElementById('nav-item-outgoing');
+            const navMini = document.getElementById('nav-item-miniserver');
             if (navIn) navIn.classList.toggle('active', isIncoming);
-            if (navOut) navOut.classList.toggle('active', !isIncoming);
+            if (navOut) navOut.classList.toggle('active', isOutgoing);
+            if (navMini) navMini.classList.toggle('active', isMiniserver);
 
             try { localStorage.setItem('active_view_tab', tab); } catch(e){}
         }
