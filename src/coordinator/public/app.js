@@ -776,6 +776,17 @@ window.updateChatContacts = function() {
         }
     });
 
+    // También agregar contactos que aparezcan en mensajes pero no en peers/workers
+    allMessages.forEach(m => {
+        const myId = mySelfId || "Coordinador";
+        const otherName = (m.from === myId || m.from === "Coordinador") ? m.to : m.from;
+        if (otherName && otherName !== myId && otherName !== "Coordinador" && otherName !== "Todos") {
+            if (!targets.find(t => t.name === otherName)) {
+                targets.push({ name: otherName, url: m.targetUrl || "", status: "ACTIVO", isPeer: true });
+            }
+        }
+    });
+
     // Eliminar duplicados
     const unique = [];
     const seen = new Set();
@@ -809,6 +820,7 @@ window.updateChatContacts = function() {
 
 window.selectChatContact = function(name, url) {
     window.currentChatContact = name;
+    window.currentChatContactUrl = url;
     document.getElementById("chat-current-name").textContent = name;
     
     const statusBadge = document.getElementById("chat-current-status");
@@ -827,11 +839,32 @@ function renderChatHistory(contactName) {
     if (!historyDiv) return;
     
     const myId = mySelfId || "Coordinador";
+    const contactUrl = window.currentChatContactUrl || "";
+
+    // Buscar TODOS los nombres asociados a esta URL (peer puede ser "z" pero mensajes dicen "Coordinador-592")
+    const contactNames = new Set([contactName]);
+    // Buscar si algún peer tiene la misma URL
+    allPeers.forEach(p => {
+        if (p.url === contactUrl && p.id) contactNames.add(p.id);
+    });
+    // Buscar en mensajes por targetUrl
+    allMessages.forEach(m => {
+        if (m.targetUrl === contactUrl) {
+            contactNames.add(m.to);
+            contactNames.add(m.from);
+        }
+    });
+    // Remover nuestro propio ID
+    contactNames.delete(myId);
+    contactNames.delete("Coordinador");
     
-    // Filtrar mensajes que involucren a este contacto
-    const msgs = allMessages.filter(m => 
-        m.from === contactName || m.to === contactName
-    ).reverse(); // Asegurar orden cronológico si el array está invertido, o asumiendo el orden correcto.
+    // Filtrar mensajes que involucren a cualquier nombre de este contacto
+    const msgs = allMessages.filter(m => {
+        const matchesFrom = contactNames.has(m.from);
+        const matchesTo = contactNames.has(m.to);
+        const matchesUrl = contactUrl && m.targetUrl === contactUrl;
+        return matchesFrom || matchesTo || matchesUrl;
+    }).reverse();
 
     if (msgs.length === 0) {
         historyDiv.innerHTML = `
@@ -844,13 +877,15 @@ function renderChatHistory(contactName) {
     }
 
     historyDiv.innerHTML = msgs.map(m => {
-        const isMine = m.from === myId || m.from === "Coordinador" || m.from === engine?.selfId;
+        const isMine = m.from === myId || m.from === "Coordinador" || m.from.startsWith(myId);
         const time = m.receivedAt || new Date(m.timestamp || Date.now()).toLocaleTimeString("es-MX", { hour12: false });
         const alignmentClass = isMine ? "mine" : "theirs";
+        const senderLabel = isMine ? "" : `<div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">📩 ${escHtml(m.from)}</div>`;
         
         return `
             <div class="chat-bubble-wrapper ${alignmentClass}">
                 <div class="chat-bubble">
+                    ${senderLabel}
                     ${escHtml(m.message)}
                 </div>
                 <span class="chat-time">${time}</span>
