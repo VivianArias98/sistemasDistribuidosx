@@ -391,30 +391,22 @@
                 <!-- ============================================================== -->
                 <div class="tab-panel" id="view-panel-chat">
                     <div class="chat-container">
-                        <!-- PASO 1: Formulario de conexión -->
-                        <div id="chat-connect-screen" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 2rem; gap: 1.5rem;">
-                            <span style="font-size: 3.5rem;">🔗</span>
-                            <h3 style="color: var(--text-1); margin:0; font-size: 1.3rem;">Conectar al Líder del Clúster</h3>
-                            <p style="color: var(--text-3); text-align: center; max-width: 400px; margin:0; line-height: 1.5;">
-                                Ingresa la URL pública (ngrok) a la que deseas conectarte. El sistema verificará si es el líder actual. Si no lo es, te redirigirá automáticamente al líder correcto.
-                            </p>
-                            <div style="display:flex; gap:0.75rem; width: 100%; max-width: 500px;">
-                                <input type="url" id="chat-ngrok-url" class="input" style="flex:1;" placeholder="https://example.ngrok-free.dev" onkeypress="if(event.key === 'Enter') connectToLeaderChat()">
-                                <button class="btn btn-primary" onclick="connectToLeaderChat()">Conectar 🚀</button>
+                        <!-- Encabezado y Formulario de Conexión (Siempre visible) -->
+                        <div id="chat-connect-screen" class="chat-header" style="flex-shrink:0; display:flex; flex-direction:column; gap:1rem; padding: 1.5rem; background: var(--bg-2); border-bottom: 1px solid var(--border);">
+                            <div style="display:flex; align-items:center; gap: 1rem;">
+                                <div class="chat-header-name" id="chat-current-name">Conectar al Líder</div>
+                                <span class="badge" id="chat-current-status" style="display:none; font-size:0.75rem; background: rgba(16,217,133,0.15); color: var(--green); padding: 4px 10px; border-radius: 20px;"></span>
                             </div>
-                            <div id="chat-connect-status" style="color: var(--text-3); font-size: 0.9rem; min-height: 1.5em; text-align: center;"></div>
+                            <div style="display:flex; gap:0.75rem; width: 100%;">
+                                <input type="url" id="chat-ngrok-url" class="input" style="flex:1;" placeholder="Ingresa la URL pública (ngrok) del líder..." onkeypress="if(event.key === 'Enter') connectToLeaderChat()">
+                                <button class="btn btn-primary" onclick="connectToLeaderChat()">Conectar 🚀</button>
+                                <button class="btn btn-ghost" id="btn-chat-disconnect" style="display:none;" onclick="disconnectLeaderChat()">✕ Desconectar</button>
+                            </div>
+                            <div id="chat-connect-status" style="color: var(--text-3); font-size: 0.9rem; min-height: 1em;"></div>
                         </div>
 
                         <!-- PASO 2: Chat activo (oculto inicialmente) -->
                         <div id="chat-active-screen" style="display:none; flex:1; flex-direction:column; width:100%;">
-                            <!-- Header del chat -->
-                            <div class="chat-header" style="flex-shrink:0;">
-                                <div style="display:flex; align-items:center; gap: 1rem;">
-                                    <div class="chat-header-name" id="chat-current-name">Líder</div>
-                                    <span class="badge" id="chat-current-status" style="font-size:0.75rem; background: rgba(16,217,133,0.15); color: var(--green); padding: 4px 10px; border-radius: 20px;"></span>
-                                </div>
-                                <button class="btn btn-ghost btn-sm" onclick="disconnectLeaderChat()">✕ Desconectar</button>
-                            </div>
                             
                             <!-- Historial de mensajes -->
                             <div class="chat-history" id="chat-history">
@@ -537,9 +529,11 @@
                 }
             } else if (isChat) {
                 // Solo llega aquí si NO es líder
+                document.getElementById("chat-connect-screen").style.display = "flex"; // Siempre visible
                 if (!window.currentLeaderContact) {
-                    document.getElementById("chat-connect-screen").style.display = "flex";
                     document.getElementById("chat-active-screen").style.display = "none";
+                } else {
+                    document.getElementById("chat-active-screen").style.display = "flex";
                 }
             }
 

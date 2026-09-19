@@ -849,9 +849,10 @@ async function connectToLeaderChat() {
             
             currentLeaderContact = { name: finalId, url: finalUrl };
             
-            // Ocultar pantalla de conexión y mostrar chat
-            document.getElementById("chat-connect-screen").style.display = "none";
+            // Mantener pantalla de conexión y mostrar chat debajo
+            // document.getElementById("chat-connect-screen").style.display = "none"; // Ya no se oculta
             document.getElementById("chat-active-screen").style.display = "flex";
+            document.getElementById("btn-chat-disconnect").style.display = "inline-block";
             
             document.getElementById("chat-current-name").textContent = finalId;
             const statusBadge = document.getElementById("chat-current-status");
@@ -873,7 +874,7 @@ async function connectToLeaderChat() {
 function disconnectLeaderChat() {
     currentLeaderContact = null;
     document.getElementById("chat-active-screen").style.display = "none";
-    document.getElementById("chat-connect-screen").style.display = "flex";
+    document.getElementById("btn-chat-disconnect").style.display = "none";
     document.getElementById("chat-connect-status").innerHTML = "";
     document.getElementById("chat-ngrok-url").value = "";
 }
