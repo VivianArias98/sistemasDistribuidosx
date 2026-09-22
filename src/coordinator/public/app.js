@@ -196,6 +196,16 @@ async function loadNodeState() {
                         document.getElementById("chat-current-status").textContent = data.leaderUrl;
                     }
                 }
+                
+                // --- ALERTA VISUAL GRANDE SOLICITADA POR EL USUARIO ---
+                const alertBanner = document.createElement("div");
+                alertBanner.innerHTML = `🚨 <b style="font-size:1.4rem;">¡ALERTA DE SISTEMA!</b><br>El líder del clúster ha cambiado.<br>El NUEVO LÍDER es: <span style="color:#fbbf24; font-size:1.5rem; text-transform:uppercase;">${currentLeader}</span>`;
+                alertBanner.style = "background: rgba(220, 38, 38, 0.95); color: white; padding: 20px 40px; text-align: center; font-size: 1.1rem; position: fixed; top: 40px; left: 50%; transform: translateX(-50%); z-index: 99999; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 0 2px #ef4444; backdrop-filter: blur(5px); transition: opacity 0.5s;";
+                document.body.appendChild(alertBanner);
+                setTimeout(() => {
+                    alertBanner.style.opacity = "0";
+                    setTimeout(() => alertBanner.remove(), 500);
+                }, 8000);
             }
             window.lastKnownLeaderId = currentLeader;
         }
