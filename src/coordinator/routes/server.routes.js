@@ -42,7 +42,18 @@ const ensureLeader = (req, res, next) => {
 /**
  * POST /register — Registra un worker con ownership por IP
  */
-router.post("/register", ensureLeader, (req, res) => {
+router.post("/register", (req, res, next) => {
+    // Interceptar para modo Gateway SOLO si NO somos el líder (o sea, este nodo es el proxy del worker local)
+    const { name, localPort } = req.body;
+    if (name && localPort && engine.role !== "leader") {
+        try {
+            const ip = registry.clientIp(req);
+            registry.register(name, `http://localhost:${localPort}`, ip, { platform: req.body.platform, hostname: req.body.hostname });
+            logger.info("Gateway", `Worker local '${name}' registrado en el proxy con puerto ${localPort}`);
+        } catch (e) {}
+    }
+    next();
+}, ensureLeader, (req, res) => {
     let { name, url, platform, hostname } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ error: "El campo 'name' es obligatorio" });
@@ -151,13 +162,14 @@ router.get("/resolve/:name", async (req, res) => {
     const visitedParam = req.query.visited || "";
     const visited = visitedParam ? visitedParam.split(",").map(u => u.trim()).filter(Boolean) : [];
 
-    // Si viene con visited, es consulta interna de un vecino -> solo responder local
+    // Si viene con visited, es consulta interna de un vecino -> responder para que ruteen por nosotros
     if (visited.length > 0) {
         const localWorker = registry.resolve(target);
         if (localWorker) {
             return res.json({ 
                 name: localWorker.name, 
-                url: localWorker.url, 
+                // ¡TRUCO DE PROXY! Le damos al vecino nuestra URL (ngrok) para que el tráfico pase por el Coordinador
+                url: engine.selfUrl ? engine.selfUrl.replace(/\/$/, "") : localWorker.url, 
                 status: localWorker.status, 
                 role: "worker", 
                 source: "local" 
@@ -399,13 +411,30 @@ router.post("/send-message/:name", ensureLeader, (req, res) => {
 /**
  * POST /receive-message — Para recibir mensajes de otros nodos (Coordinadores o Workers)
  */
-router.post("/receive-message", (req, res) => {
+router.post("/receive-message", async (req, res) => {
     const { from, to, message, timestamp } = req.body;
     if (!message) return res.status(400).json({ error: "Falta 'message'" });
     
+    const target = to || "Coordinador";
+    
+    // Si el mensaje es para un worker interno, hacer de Reverse Proxy (Gateway)
+    if (target !== "Coordinador" && target !== "Todos") {
+        const localWorker = registry.resolve(target);
+        if (localWorker) {
+            try {
+                const endpoint = localWorker.url.replace(/\/$/, "") + "/receive-message";
+                await axios.post(endpoint, { from, to: target, message, timestamp: timestamp || Date.now() }, { timeout: 3000 });
+                logger.msg("Gateway", `Mensaje de '${from}' reenviado al worker local '${target}' (${localWorker.url})`);
+            } catch (err) {
+                logger.error("Gateway", `Error reenviando mensaje al worker '${target}': ${err.message}`);
+                // Seguimos adelante para guardarlo en el store al menos
+            }
+        }
+    }
+
     const entry = msgStore.add({ 
         from: from || "Desconocido", 
-        to: to || "Coordinador", 
+        to: target, 
         message, 
         status: "ENTREGADO" 
     });

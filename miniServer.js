@@ -261,6 +261,7 @@ async function register(retryCount = 0) {
         const response = await axios.post(`${MIDDLEWARE_URL}/register`, {
             name: NAME,
             url: MY_URL,
+            localPort: PORT,
             platform: os.platform(),
             hostname: os.hostname()
         });
