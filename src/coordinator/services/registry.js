@@ -76,6 +76,7 @@ function register(name, url, ip, meta = {}) {
         registeredAt:  Date.now(),
         fallenAt:      null,
         messages:      [],
+        localPort:     meta.localPort || null,
     };
     workers.set(name, worker);
     logger.info("Registry", `Worker registrado: ${name} (${url}) — IP owner: ${ip}`);
@@ -131,15 +132,13 @@ function unregister(name) {
 
 /**
  * Purga del registro al propio nodo (si se autoregistró antes que los guards estuvieran activos).
- * Compara por nombre y por URL.
+ * Compara solo por nombre para permitir que un worker local use la URL pública del coordinador.
  * @param {string} selfId
  * @param {string} selfUrl
  */
 function removeSelf(selfId, selfUrl) {
-    const cleanSelfUrl = (selfUrl || "").replace(/\/$/, "");
     for (const [name, w] of workers) {
-        const wUrl = (w.url || "").replace(/\/$/, "");
-        if (name === selfId || wUrl === cleanSelfUrl) {
+        if (name === selfId) {
             workers.delete(name);
         }
     }

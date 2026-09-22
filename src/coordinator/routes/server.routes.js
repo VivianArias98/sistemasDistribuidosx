@@ -42,26 +42,23 @@ const ensureLeader = (req, res, next) => {
 /**
  * POST /register — Registra un worker con ownership por IP
  */
-router.post("/register", (req, res, next) => {
-    // Interceptar para modo Gateway SOLO si NO somos el líder (o sea, este nodo es el proxy del worker local)
-    const { name, localPort } = req.body;
-    if (name && localPort && engine.role !== "leader") {
-        try {
-            const ip = registry.clientIp(req);
-            registry.register(name, `http://localhost:${localPort}`, ip, { platform: req.body.platform, hostname: req.body.hostname });
-            logger.info("Gateway", `Worker local '${name}' registrado en el proxy con puerto ${localPort}`);
-        } catch (e) {}
-    }
-    next();
-}, ensureLeader, (req, res) => {
-    let { name, url, platform, hostname } = req.body;
+router.post("/register", ensureLeader, (req, res) => {
+    let { name, url, platform, hostname, localPort } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ error: "El campo 'name' es obligatorio" });
     if (!url?.trim())  return res.status(400).json({ error: "El campo 'url' es obligatorio" });
 
     name = name.trim();
     url  = url.trim();
+
     const ip = registry.clientIp(req);
+    const meta = { platform, hostname };
+    
+    // Si la petición viene de localhost, guardamos su puerto local en secreto para el Gateway
+    const isLocal = req.get("host") && (req.get("host").includes("localhost") || req.get("host").includes("127.0.0.1"));
+    if (isLocal && localPort) {
+        meta.localPort = localPort;
+    }
 
     // ── Bloquear auto-registro: un nodo no puede registrarse con el mismo ID que este servidor
     if (engine.selfId && engine.selfId !== "UNCONFIGURED" && name === engine.selfId) {
@@ -70,7 +67,7 @@ router.post("/register", (req, res, next) => {
     }
 
     try {
-        const { worker, created, reactivated } = registry.register(name, url, ip, { platform, hostname });
+        const { worker, created, reactivated } = registry.register(name, url, ip, meta);
         const code = created ? 201 : 200;
         const msg  = created       ? `Worker '${name}' registrado exitosamente`
                    : reactivated   ? `Worker '${name}' reactivado exitosamente`
@@ -420,11 +417,11 @@ router.post("/receive-message", async (req, res) => {
     // Si el mensaje es para un worker interno, hacer de Reverse Proxy (Gateway)
     if (target !== "Coordinador" && target !== "Todos") {
         const localWorker = registry.resolve(target);
-        if (localWorker) {
+        if (localWorker && localWorker.localPort) {
             try {
-                const endpoint = localWorker.url.replace(/\/$/, "") + "/receive-message";
+                const endpoint = `http://localhost:${localWorker.localPort}/receive-message`;
                 await axios.post(endpoint, { from, to: target, message, timestamp: timestamp || Date.now() }, { timeout: 3000 });
-                logger.msg("Gateway", `Mensaje de '${from}' reenviado al worker local '${target}' (${localWorker.url})`);
+                logger.msg("Gateway", `Mensaje de '${from}' reenviado internamente al worker local '${target}' (Puerto ${localWorker.localPort})`);
             } catch (err) {
                 logger.error("Gateway", `Error reenviando mensaje al worker '${target}': ${err.message}`);
                 // Seguimos adelante para guardarlo en el store al menos
@@ -505,7 +502,7 @@ router.post("/api/send-message", async (req, res) => {
         // 1. Buscar en Naming Service (Workers)
         const workerTarget = registry.resolve(to);
         if (workerTarget) {
-            targetUrl = workerTarget.url;
+            targetUrl = workerTarget.localPort ? `http://localhost:${workerTarget.localPort}` : workerTarget.url;
             targetStatus = workerTarget.status;
         } else {
             // 2. Buscar en el Engine (Otros Coordinadores)
