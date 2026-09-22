@@ -27,14 +27,9 @@ function clientIp(req) {
  * @returns {{ worker, created: boolean, reactivated: boolean }}
  */
 function register(name, url, ip, meta = {}) {
-    // Eliminar cualquier otro worker registrado previamente con esta misma URL exacta 
-    // (previene ghost workers si el nodo cambia de ID/nombre pero mantiene su ngrok/URL)
-    for (const [existingName, w] of workers.entries()) {
-        if (w.url === url && existingName !== name) {
-            workers.delete(existingName);
-            logger.warn("Registry", `Se eliminó worker obsoleto '${existingName}' porque la URL ${url} ahora pertenece a '${name}'`);
-        }
-    }
+    // [Eliminado el chequeo de "Ghost Workers" por URL, ya que en el modo Gateway
+    // un Coordinador (Peer) y un Worker de la misma máquina remota van a compartir 
+    // la misma URL de ngrok, y si los borramos entran en un loop de re-registro infinito]
 
     const existing = workers.get(name);
 
