@@ -23,7 +23,15 @@ const ensureLeader = (req, res, next) => {
     const peers = engine.knownPeers().map(p => p.url);
 
     if (engine.leaderUrl) {
-        // Sé quién es el líder → 409 (Redirección con URL del líder)
+        // Si la petición es para registrar, devolver 200 con formato de redirección compatible con miniServer.js
+        if (req.path.includes("/register") || req.url.includes("/register")) {
+            return res.status(200).json({ 
+                redirect: true,
+                leaderUrl: engine.leaderUrl,
+                peers 
+            });
+        }
+        // Para otros endpoints (ej. si extendemos a otros), devolver 409
         return res.status(409).json({ 
             leader: engine.leaderUrl,
             peers 
@@ -42,7 +50,21 @@ const ensureLeader = (req, res, next) => {
 /**
  * POST /register — Registra un worker con ownership por IP
  */
-router.post("/register", ensureLeader, (req, res) => {
+router.post("/register", (req, res, next) => {
+    // Interceptar para modo Gateway: Si la petición viene de localhost, guardamos su puerto local en secreto
+    const { name, platform, hostname, localPort } = req.body;
+    const isLocal = req.get("host") && (req.get("host").includes("localhost") || req.get("host").includes("127.0.0.1"));
+    
+    if (isLocal && name && localPort) {
+        try {
+            const ip = registry.clientIp(req);
+            const meta = { platform, hostname, localPort };
+            registry.register(name, `http://localhost:${localPort}`, ip, meta);
+            logger.info("Gateway", `Worker local '${name}' interceptado y registrado en el proxy con puerto ${localPort}`);
+        } catch (e) {}
+    }
+    next();
+}, ensureLeader, (req, res) => {
     let { name, url, platform, hostname, localPort } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ error: "El campo 'name' es obligatorio" });
@@ -54,7 +76,6 @@ router.post("/register", ensureLeader, (req, res) => {
     const ip = registry.clientIp(req);
     const meta = { platform, hostname };
     
-    // Si la petición viene de localhost, guardamos su puerto local en secreto para el Gateway
     const isLocal = req.get("host") && (req.get("host").includes("localhost") || req.get("host").includes("127.0.0.1"));
     if (isLocal && localPort) {
         meta.localPort = localPort;
