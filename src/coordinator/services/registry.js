@@ -41,6 +41,11 @@ function register(name, url, ip, meta = {}) {
             throw err;
         }
 
+        // Si el worker está simulando caída, no permitir que un /register lo reactive prematuramente
+        if (existing.ignorePulsesUntil && Date.now() < existing.ignorePulsesUntil) {
+            return { worker: existing, created: false, reactivated: false };
+        }
+
         if (existing.status === "ACTIVO" && existing.url === url) {
             // Reconexión del mismo worker desde la misma IP
             existing.lastHeartbeat = Date.now();
@@ -85,6 +90,12 @@ function register(name, url, ip, meta = {}) {
 function pulse(name) {
     const w = workers.get(name);
     if (!w) return null;
+    
+    // Si el worker está simulando caída, ignorar el pulso hasta que expire el tiempo
+    if (w.ignorePulsesUntil && Date.now() < w.ignorePulsesUntil) {
+        return w;
+    }
+
     const wasFallen = w.status === "CAIDO";
     w.lastHeartbeat = Date.now();
     w.status        = "ACTIVO";
@@ -115,6 +126,8 @@ function markFallen(name) {
     if (!w) return null;
     w.status   = "CAIDO";
     w.fallenAt = Date.now();
+    // Simular caída real ignorando los pulsos entrantes durante 30 segundos
+    w.ignorePulsesUntil = Date.now() + 30000;
     return w;
 }
 

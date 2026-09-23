@@ -668,9 +668,12 @@ router.get("/overview", (req, res) => {
  */
 router.post("/api/simulate-failure/:name", (req, res) => {
     const w = registry.markFallen(req.params.name);
-    if (!w) return res.status(404).json({ error: "Worker no encontrado" });
+    // También simular la caída a nivel del motor de elección (P2P) si es que el nodo es un peer
+    const p = engine.simulateFailure(req.params.name);
+    
+    if (!w && !p) return res.status(404).json({ error: "Worker/Peer no encontrado" });
     logger.timeout("Debug", `Caída simulada manualmente: ${req.params.name}`);
-    res.json({ message: `Worker '${req.params.name}' marcado como CAIDO`, status: "CAIDO" });
+    res.json({ message: `Worker/Peer '${req.params.name}' marcado como CAIDO`, status: "CAIDO" });
 });
 
 module.exports = router;

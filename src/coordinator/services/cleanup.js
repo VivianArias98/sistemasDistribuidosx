@@ -22,9 +22,9 @@ function start() {
                 events.emit("worker-down", { name: worker.name, url: worker.url });
             }
             
-            // Si pasan más de 20 segundos sin latido, lo desconectamos/eliminamos automáticamente de la tabla.
+            // Si pasan más de 45 segundos sin latido, lo desconectamos/eliminamos automáticamente de la tabla.
             // EXCEPCIÓN: Si tiene localPort, es un proxy de Gateway. NO lo eliminamos para no perder el ruteo.
-            if (elapsed > 20000) {
+            if (elapsed > 45000) {
                 if (worker.localPort) {
                     // Mantener el mapping del Gateway vivo, pero marcarlo caído visualmente
                     if (worker.status !== "CAIDO") {
@@ -33,7 +33,7 @@ function start() {
                     }
                 } else {
                     registry.unregister(worker.name);
-                    logger.info("Cleanup", `Worker ELIMINADO automáticamente tras >20s sin latido: ${worker.name}`);
+                    logger.info("Cleanup", `Worker ELIMINADO automáticamente tras >45s sin latido: ${worker.name}`);
                 }
             }
         }

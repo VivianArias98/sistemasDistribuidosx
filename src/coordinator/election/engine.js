@@ -100,6 +100,12 @@ const engine = {
         }
 
         const existing = peers.get(cleanUrl) || {};
+        
+        // Simular caída en P2P: ignorar la actualización de estado/latido por 30 segundos
+        if (existing.ignoreGossipUntil && Date.now() < existing.ignoreGossipUntil) {
+            return;
+        }
+
         const oldId = existing.id;
 
         peers.set(cleanUrl, {
@@ -267,6 +273,21 @@ const engine = {
 
         await strategy.handleMessage(msg, res);
     },
+
+    /**
+     * Simula la caída de un peer (usado para pruebas/UI).
+     */
+    simulateFailure(idOrName) {
+        for (const [url, p] of peers.entries()) {
+            if (p.id === idOrName) {
+                p.alive = false;
+                p.ignoreGossipUntil = Date.now() + 30000;
+                peers.set(url, p);
+                return true;
+            }
+        }
+        return false;
+    },
 };
 
 // ─── Loop principal ────────────────────────────────────────────────────────────
@@ -296,6 +317,11 @@ async function _tick() {
 
     // — Gossip: ping a todos los peers enviando snapshot estricto —
     for (const [url, peer] of peers) {
+        // Si el peer está en modo de simulación de caída, no hacerle ping ni actualizar su estado
+        if (peer.ignoreGossipUntil && now < peer.ignoreGossipUntil) {
+            continue;
+        }
+
         try {
             const snap = engine.snapshot();
             // Payload dual-formato:
