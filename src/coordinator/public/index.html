@@ -223,6 +223,40 @@
                             </table>
                         </div>
                     </section>
+                    
+                    <section class="card connection-card incoming-card" id="section-miniservers" style="margin-top: 1rem;">
+                        <div class="card-header incoming-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                            <div>
+                                <div class="card-title">
+                                    <span class="card-icon">💻</span>
+                                    <span>Workers (miniServer) reales conectados <span class="badge-tag tag-in">WORKER</span></span>
+                                </div>
+                                <div class="card-subtitle">
+                                    Nodos puros (miniServer.js) que se registraron en tu middleware.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-wrap" id="miniserver-table-wrap">
+                            <table class="nodes-table">
+                                <thead>
+                                    <tr>
+                                        <th>Estado</th>
+                                        <th>Nombre / ID</th>
+                                        <th>URL de Origen</th>
+                                        <th>Rol</th>
+                                        <th>Sin pulso</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="miniserver-tbody">
+                                    <tr>
+                                        <td colspan="6" class="empty-cell">Esperando que algún miniServer se conecte...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
 
                     <!-- PASO 3: Bandeja de entrada y respuestas (Solo para el Líder) -->
                     <section class="card" id="chat-leader-inbox-screen" style="display:none; flex-direction:row; width:100%; height: 500px; margin-top: 1rem; overflow:hidden; border: 1px solid var(--border);">

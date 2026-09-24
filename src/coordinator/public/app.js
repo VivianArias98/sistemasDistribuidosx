@@ -232,20 +232,26 @@ async function loadWorkers() {
 
 function renderWorkers(workers) {
     const tbody = $("nodes-tbody");
+    const msTbody = $("miniserver-tbody");
+    
     if ($("naming-count")) $("naming-count").textContent = `${workers.length} worker${workers.length !== 1 ? "s" : ""}`;
     if ($("tab-incoming-badge")) $("tab-incoming-badge").textContent = workers.length;
 
     if (!tbody) return;
 
-    if (workers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">Sin workers registrados aún...</td></tr>';
-        return;
-    }
+    let peersHtml = "";
+    let workersHtml = "";
 
-    tbody.innerHTML = workers.map(w => {
+    workers.forEach(w => {
         let role = (w.role || "worker").toLowerCase();
         let displayUrl = w.url;
+        let isPeer = false;
         
+        // Si no tiene localPort, es un peer disfrazado de worker que entró por Naming Service
+        if (!w.localPort) {
+            isPeer = true;
+        }
+
         // Sincronizar el rol y la URL real desde la red de gossip (engine) si conocemos a este peer
         if (typeof allPeers !== 'undefined' && Array.isArray(allPeers)) {
             const clusterPeer = allPeers.find(p => {
@@ -258,8 +264,7 @@ function renderWorkers(workers) {
                 if (clusterPeer.snapshot && clusterPeer.snapshot.role) {
                     role = clusterPeer.snapshot.role.toLowerCase();
                 }
-                // Si el peer remoto está mal configurado y dice ser "localhost", pero 
-                // nosotros sabemos su URL real de ngrok (porque lo tenemos en la tabla de clúster), la corregimos visualmente.
+                // Corregir visualmente la URL si dice localhost pero conocemos la real
                 if (displayUrl.includes("localhost") || displayUrl.includes("127.0.0.1")) {
                     if (clusterPeer.url && !clusterPeer.url.includes("localhost")) {
                         displayUrl = clusterPeer.url;
@@ -273,7 +278,7 @@ function renderWorkers(workers) {
                         : role === "follower" ? "badge-role-follower" 
                         : "badge-role-worker";
 
-        return `
+        const rowHtml = `
             <tr>
                 <td><span class="status-dot ${w.status === "ACTIVO" ? "active" : "fallen"}">${w.status === "ACTIVO" ? "ACTIVO" : "CAÍDO"}</span></td>
                 <td style="font-weight:600">${escHtml(w.name)}</td>
@@ -288,7 +293,25 @@ function renderWorkers(workers) {
                 </td>
             </tr>
         `;
-    }).join("");
+
+        if (isPeer) {
+            peersHtml += rowHtml;
+        } else {
+            workersHtml += rowHtml;
+        }
+    });
+
+    if (peersHtml === "") {
+        peersHtml = '<tr><td colspan="6" class="empty-cell">Sin peers entrantes registrados aún...</td></tr>';
+    }
+    if (workersHtml === "") {
+        workersHtml = '<tr><td colspan="6" class="empty-cell">Sin workers (miniServer) conectados aún...</td></tr>';
+    }
+
+    tbody.innerHTML = peersHtml;
+    if (msTbody) {
+        msTbody.innerHTML = workersHtml;
+    }
 
     updateMessageDropdown();
     if (typeof updateChatContacts === "function") updateChatContacts();

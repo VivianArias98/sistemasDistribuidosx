@@ -76,8 +76,7 @@ router.post("/register", (req, res, next) => {
     const ip = registry.clientIp(req);
     const meta = { platform, hostname };
     
-    const isLocal = req.get("host") && (req.get("host").includes("localhost") || req.get("host").includes("127.0.0.1"));
-    if (isLocal && localPort) {
+    if (localPort) {
         meta.localPort = localPort;
     }
 
@@ -158,7 +157,7 @@ async function resolveWithNeighbors(targetName, visited = []) {
             if (resp.data && resp.data.url) {
                 return {
                     name: resp.data.name || cleanTarget,
-                    url: resp.data.url,
+                    url: peerUrl, // Usamos la URL del Coordinador vecino para que haga de Proxy, ignorando su URL interna
                     status: resp.data.status || "ACTIVO",
                     role: resp.data.role || "worker",
                     source: "vecino",
@@ -523,7 +522,7 @@ router.post("/api/send-message", async (req, res) => {
         // 1. Buscar en Naming Service (Workers)
         const workerTarget = registry.resolve(to);
         if (workerTarget) {
-            targetUrl = workerTarget.localPort ? `http://localhost:${workerTarget.localPort}` : workerTarget.url;
+            targetUrl = workerTarget.url;
             targetStatus = workerTarget.status;
         } else {
             // 2. Buscar en el Engine (Otros Coordinadores)
@@ -645,6 +644,7 @@ router.get("/api/status", (req, res) => {
             role,
             platform: w.platform, 
             hostname: w.hostname,
+            localPort: w.localPort,
             hasPulse: (now - w.lastHeartbeat) <= config.workerTimeoutMs,
             secondsWithoutPulse: Math.floor((now - w.lastHeartbeat) / 1000),
             lastHeartbeat: w.lastHeartbeat,

@@ -284,7 +284,7 @@ async function register(retryCount = 0) {
                 throw error;
             }
         }
-        
+
         console.error(`❌ [ERROR AL REGISTRAR] en ${MIDDLEWARE_URL}:`, error.response?.data?.error || error.message);
         throw error;
     }
@@ -308,10 +308,10 @@ function startHeartbeatLoop() {
             if (error.response?.status === 409 && error.response?.data?.leader) {
                 console.log(`🔀 [REDIRECCIÓN] El líder cambió a: ${error.response.data.leader}. Reconectando...`);
                 MIDDLEWARE_URL = error.response.data.leader.replace(/\/$/, "");
-                try { await register(); } catch (e) {}
+                try { await register(); } catch (e) { }
             } else if (error.response?.data?.mustRegister) {
                 console.log("ℹ️ Re-registrando en el Servicio de Nombres (me eliminaron)...");
-                try { await register(); } catch (e) {}
+                try { await register(); } catch (e) { }
             } else {
                 console.log(`⚠️ Error al enviar pulso al middleware: ${error.message}`);
                 // Si hay un error de conexión (el líder cayó), intentar con un follower
@@ -323,7 +323,7 @@ function startHeartbeatLoop() {
                         const nextPeer = availablePeers[Math.floor(Math.random() * availablePeers.length)];
                         MIDDLEWARE_URL = nextPeer.replace(/\/$/, "");
                         console.log(`🔌 Conectando al peer de respaldo: ${MIDDLEWARE_URL} ...`);
-                        try { await register(); } catch (e) {}
+                        try { await register(); } catch (e) { }
                     }
                 }
             }
@@ -358,11 +358,9 @@ function startInteractiveChat() {
         rl.prompt();
     });
 }
-
 // -----------------------------------------------------------------------------
 // ARRANQUE DEL SERVIDOR
 // -----------------------------------------------------------------------------
-
 app.listen(PORT, async () => {
     console.log("=========================================================");
     console.log(`🤖 NODO CLIENTE (miniServer) INICIADO`);

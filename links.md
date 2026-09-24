@@ -18,3 +18,8 @@ cd sistemasDistribuidosx
 node miniServer.js 4003 WorkerDeVivian https://backside-cufflink-reapprove.ngrok-free.dev http://localhost:3000
 
 npm run start
+
+
+en caso hayder
+
+node miniServer.js 4001 WorkerDeHayder https://semiyearly-alyce-otocystic.ngrok-free.dev http://localhost:3000
