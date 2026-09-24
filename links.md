@@ -23,3 +23,9 @@ npm run start
 en caso hayder
 
 node miniServer.js 4001 WorkerDeHayder https://semiyearly-alyce-otocystic.ngrok-free.dev http://localhost:3000
+
+
+
+
+worker vivian 
+node miniServer.js 3000 WorkerDeVivian https://backside-cufflink-reapprove.ngrok-free.dev https://semiyearly-alyce-otocystic.ngrok-free.dev

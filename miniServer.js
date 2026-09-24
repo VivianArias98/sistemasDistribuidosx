@@ -49,22 +49,10 @@ let knownPeers = []; // Para failover si el líder cae
 // RUTAS BÁSICAS
 // -----------------------------------------------------------------------------
 
+const path = require("path");
+
 app.get("/", (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>${NAME} - Nodo Distribuido</title></head>
-        <body style="font-family: sans-serif; padding: 2rem; background: #0f172a; color: #f8fafc;">
-            <h1>🟢 Nodo Activo: ${NAME}</h1>
-            <p><strong>Puerto local:</strong> ${PORT}</p>
-            <p><strong>URL registrada (ngrok / IP):</strong> ${MY_URL}</p>
-            <p><strong>Middleware (Padre):</strong> ${MIDDLEWARE_URL}</p>
-            <p><strong>Plataforma:</strong> ${os.platform()} (${os.hostname()})</p>
-            <p><strong>Pulsos activos:</strong> ${isPulseActive ? "SI (cada 5s)" : "NO (Pausado)"}</p>
-            <p><strong>Mensajes recibidos:</strong> ${receivedMessages.length}</p>
-        </body>
-        </html>
-    `);
+    res.sendFile(path.join(__dirname, "miniUI.html"));
 });
 
 app.get("/status", (req, res) => {
@@ -77,8 +65,37 @@ app.get("/status", (req, res) => {
         hostname: os.hostname(),
         isPulseActive,
         messagesCount: receivedMessages.length,
-        uptime: Math.floor(process.uptime())
+        uptime: Math.floor(process.uptime()),
+        isConnected: pulseInterval !== null
     });
+});
+
+app.post("/api/connect", async (req, res) => {
+    const { middlewareUrl } = req.body;
+    if (!middlewareUrl) return res.status(400).json({ error: "Falta middlewareUrl" });
+    
+    MIDDLEWARE_URL = middlewareUrl.trim().replace(/\/$/, "");
+    try {
+        await register();
+        startHeartbeatLoop();
+        res.json({ success: true, middlewareUrl: MIDDLEWARE_URL });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get("/api/contacts", async (req, res) => {
+    if (!MIDDLEWARE_URL) return res.json([]);
+    try {
+        const response = await axios.get(`${MIDDLEWARE_URL}/api/status`, { timeout: 3000 });
+        if (Array.isArray(response.data)) {
+            res.json(response.data);
+        } else {
+            res.json([]);
+        }
+    } catch (e) {
+        res.status(500).json({ error: "No se pudo obtener contactos" });
+    }
 });
 
 // -----------------------------------------------------------------------------
@@ -393,11 +410,11 @@ app.listen(PORT, async () => {
     console.log("=========================================================");
 
     try {
-        await register();
-        startHeartbeatLoop();
+        // En vez de registrar obligatoriamente, solo iniciaremos el chat interactivo 
+        // y esperaremos a que el usuario se conecte por la interfaz web
+        console.log(`💡 Ve a http://localhost:${PORT} en tu navegador para usar la interfaz gráfica.`);
         startInteractiveChat();
     } catch (error) {
-        console.log("💡 Para reintentar el registro o cambiar el nombre, use el endpoint /hotreload o reinicie el nodo.");
-        startInteractiveChat(); // Permitir chat aunque no esté registrado (intentará enviarlo)
+        console.log("💡 Error al iniciar chat.");
     }
 });

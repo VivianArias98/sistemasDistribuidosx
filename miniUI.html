@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-panel: rgba(30, 41, 59, 0.7);
+            --primary: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg-dark); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Glassmorphism utility */
+        .glass {
+            background: var(--bg-panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        /* Topbar */
+        header { padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); background: rgba(15, 23, 42, 0.8); }
+        .logo { font-weight: 700; font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; }
+        .status-badge { padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 0.5rem; }
+        .status-disconnected { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .status-connected { background: rgba(34, 197, 94, 0.2); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); }
+        
+        /* Main Container */
+        #main-container { flex: 1; display: flex; justify-content: center; align-items: center; padding: 2rem; position: relative; }
+        
+        /* Connection Modal */
+        #connect-modal { width: 100%; max-width: 450px; padding: 2.5rem; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        #connect-modal h2 { margin-bottom: 0.5rem; font-weight: 600; }
+        #connect-modal p { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.95rem; }
+        .input-group { display: flex; flex-direction: column; text-align: left; margin-bottom: 1.5rem; }
+        .input-group label { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        input[type="text"] { width: 100%; padding: 0.8rem 1rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; color: white; font-size: 1rem; transition: all 0.2s; }
+        input[type="text"]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2); }
+        button { width: 100%; padding: 0.9rem; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); }
+        button:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        button:active { transform: translateY(1px); }
+
+        /* Dashboard View (Hidden by default) */
+        #dashboard-view { display: none; width: 100%; height: 100%; max-width: 1200px; gap: 1.5rem; }
+        .sidebar { width: 300px; display: flex; flex-direction: column; gap: 1rem; }
+        .card { padding: 1.5rem; flex: 1; display: flex; flex-direction: column; }
+        .card h3 { margin-bottom: 1rem; font-size: 1.1rem; color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        
+        .contact-list { overflow-y: auto; flex: 1; }
+        .contact-item { padding: 0.8rem; border-radius: 8px; cursor: pointer; transition: all 0.2s; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.8rem; background: rgba(255,255,255,0.03); border: 1px solid transparent; }
+        .contact-item:hover { background: rgba(255,255,255,0.08); }
+        .contact-item.active { background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.3); }
+        
+        .chat-area { flex: 1; display: flex; flex-direction: column; }
+        .chat-header { padding-bottom: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; font-weight: 600; font-size: 1.2rem; }
+        .chat-messages { flex: 1; overflow-y: auto; padding-right: 1rem; display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; }
+        
+        .bubble { max-width: 75%; padding: 0.8rem 1.2rem; border-radius: 18px; font-size: 0.95rem; line-height: 1.4; position: relative; }
+        .bubble.mine { align-self: flex-end; background: var(--primary); border-bottom-right-radius: 4px; }
+        .bubble.theirs { align-self: flex-start; background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px; }
+        .bubble-time { font-size: 0.7rem; opacity: 0.7; margin-top: 0.3rem; text-align: right; }
+        
+        .chat-input { display: flex; gap: 0.5rem; }
+        .chat-input input { flex: 1; border-radius: 20px; padding: 0.8rem 1.5rem; }
+        .chat-input button { width: auto; padding: 0.8rem 1.5rem; border-radius: 20px; }
+
+        /* Background animated blobs */
+        .blob { position: absolute; filter: blur(80px); z-index: -1; opacity: 0.4; animation: float 10s infinite alternate ease-in-out; }
+        .blob-1 { width: 400px; height: 400px; background: rgba(139, 92, 246, 0.4); top: -100px; left: -100px; border-radius: 50%; }
+        .blob-2 { width: 300px; height: 300px; background: rgba(59, 130, 246, 0.4); bottom: -50px; right: -50px; border-radius: 50%; animation-delay: -5s; }
+        
+        @keyframes float { 0% { transform: translate(0,0); } 100% { transform: translate(30px, 30px); } }
+    </style>
+</head>
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <header>
+        <div class="logo">
+            🤖 <span id="app-name">Worker Node</span>
+        </div>
+        <div id="status-indicator" class="status-badge status-disconnected">
+            <span class="dot">●</span> Desconectado
+        </div>
+    </header>
+
+    <div id="main-container">
+        <!-- CONNECTION MODAL -->
+        <div id="connect-modal" class="glass">
+            <h2>Conectar al Servidor</h2>
+            <p>Ingresa la URL del Coordinador (Middleware) para unirte a la red distribuida.</p>
+            
+            <div class="input-group">
+                <label>URL del Coordinador</label>
+                <input type="text" id="middleware-url" placeholder="Ej: https://...ngrok-free.dev" value="http://localhost:3000">
+            </div>
+            
+            <button id="btn-connect">Conectar 🚀</button>
+            <p id="connect-error" style="color: #ef4444; margin-top: 1rem; font-size: 0.9rem; display: none;"></p>
+        </div>
+
+        <!-- DASHBOARD (Hidden) -->
+        <div id="dashboard-view">
+            <!-- Sidebar -->
+            <div class="sidebar glass card">
+                <h3>Contactos</h3>
+                <div class="contact-list" id="contact-list">
+                    <!-- Contacts will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Chat Area -->
+            <div class="chat-area glass card">
+                <div class="chat-header">
+                    Hablando con: <span id="current-chat-name" style="color: var(--primary);">Nadie</span>
+                </div>
+                
+                <div class="chat-messages" id="chat-messages">
+                    <div style="text-align: center; color: var(--text-muted); margin-top: 2rem;">
+                        Selecciona un contacto a la izquierda para empezar a chatear.
+                    </div>
+                </div>
+                
+                <div class="chat-input">
+                    <input type="text" id="msg-input" placeholder="Escribe un mensaje..." disabled>
+                    <button id="btn-send" disabled>Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let myName = "";
+        let isConnected = false;
+        let selectedContact = null;
+        let allMessages = [];
+        let contacts = [];
+
+        // DOM Elements
+        const connectModal = document.getElementById("connect-modal");
+        const dashboardView = document.getElementById("dashboard-view");
+        const statusIndicator = document.getElementById("status-indicator");
+        const appName = document.getElementById("app-name");
+        const btnConnect = document.getElementById("btn-connect");
+        const errorText = document.getElementById("connect-error");
+        
+        // Fetch Initial Status
+        async function checkStatus() {
+            try {
+                const res = await fetch("/status");
+                const data = await res.json();
+                myName = data.name;
+                appName.textContent = data.name;
+                
+                if (data.isConnected) {
+                    showDashboard();
+                }
+            } catch (e) {
+                console.error("Error al obtener estado:", e);
+            }
+        }
+        
+        // Connect Action
+        btnConnect.addEventListener("click", async () => {
+            const url = document.getElementById("middleware-url").value.trim();
+            if (!url) return;
+            
+            btnConnect.textContent = "Conectando...";
+            btnConnect.disabled = true;
+            errorText.style.display = "none";
+            
+            try {
+                const res = await fetch("/api/connect", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ middlewareUrl: url })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showDashboard();
+                } else {
+                    throw new Error(data.error || "Error desconocido");
+                }
+            } catch (e) {
+                errorText.textContent = e.message;
+                errorText.style.display = "block";
+            } finally {
+                btnConnect.textContent = "Conectar 🚀";
+                btnConnect.disabled = false;
+            }
+        });
+        
+        function showDashboard() {
+            connectModal.style.display = "none";
+            dashboardView.style.display = "flex";
+            statusIndicator.className = "status-badge status-connected";
+            statusIndicator.innerHTML = '<span class="dot">●</span> Conectado';
+            isConnected = true;
+            
+            fetchContacts();
+            setInterval(fetchMessages, 2000);
+            setInterval(fetchContacts, 5000); // refresh contacts periodically
+        }
+        
+        async function fetchContacts() {
+            if (!isConnected) return;
+            try {
+                // Le pedimos al worker que consulte los workers del líder
+                const res = await fetch("/api/contacts");
+                if (res.ok) {
+                    const newContacts = await res.json();
+                    // Agregar siempre al Coordinador
+                    const list = [{ name: "Coordinador", isLeader: true }, ...newContacts.filter(c => c.name !== myName)];
+                    renderContacts(list);
+                }
+            } catch (e) {}
+        }
+        
+        function renderContacts(list) {
+            const container = document.getElementById("contact-list");
+            if(list.length === 0) {
+                container.innerHTML = '<div style="color:#94a3b8; font-size:0.9rem; text-align:center;">No hay contactos</div>';
+                return;
+            }
+            
+            let html = "";
+            list.forEach(c => {
+                const isSelected = selectedContact === c.name;
+                html += `
+                    <div class="contact-item ${isSelected ? 'active' : ''}" onclick="selectContact('${c.name}')">
+                        <span style="font-size: 1.2rem;">${c.isLeader ? '👑' : '👤'}</span>
+                        <span>${c.name}</span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+        
+        window.selectContact = (name) => {
+            selectedContact = name;
+            document.getElementById("current-chat-name").textContent = name;
+            document.getElementById("msg-input").disabled = false;
+            document.getElementById("btn-send").disabled = false;
+            
+            // Re-render contact list to show active
+            const items = document.querySelectorAll('.contact-item');
+            items.forEach(el => {
+                el.classList.remove('active');
+                if (el.textContent.includes(name)) el.classList.add('active');
+            });
+            
+            renderChat();
+        };
+        
+        async function fetchMessages() {
+            if (!isConnected) return;
+            try {
+                const res = await fetch("/messages");
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.length !== allMessages.length) {
+                        allMessages = data;
+                        renderChat();
+                    }
+                }
+            } catch(e) {}
+        }
+        
+        function renderChat() {
+            const container = document.getElementById("chat-messages");
+            if (!selectedContact) return;
+            
+            const msgs = allMessages.filter(m => m.from === selectedContact || m.to === selectedContact).reverse();
+            
+            if (msgs.length === 0) {
+                container.innerHTML = `<div style="text-align:center; color:#94a3b8; margin-top:2rem;">No hay mensajes con ${selectedContact}</div>`;
+                return;
+            }
+            
+            container.innerHTML = msgs.map(m => {
+                const isMine = m.from === myName;
+                return `
+                    <div class="bubble ${isMine ? 'mine' : 'theirs'}">
+                        ${m.message}
+                        <div class="bubble-time">${m.receivedAt || new Date(m.timestamp).toLocaleTimeString()}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        document.getElementById("btn-send").addEventListener("click", sendMessage);
+        document.getElementById("msg-input").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
+        
+        async function sendMessage() {
+            const input = document.getElementById("msg-input");
+            const msg = input.value.trim();
+            if (!msg || !selectedContact) return;
+            
+            input.value = "";
+            
+            // Add optimistically to local array
+            const tempMsg = {
+                id: "temp_" + Date.now(),
+                from: myName,
+                to: selectedContact,
+                message: msg,
+                timestamp: Date.now(),
+                receivedAt: new Date().toLocaleTimeString()
+            };
+            allMessages.unshift(tempMsg);
+            renderChat();
+            
+            try {
+                await fetch("/send-to", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ to: selectedContact, message: msg })
+                });
+            } catch (e) {
+                console.error("Error al enviar", e);
+            }
+        }
+        
+        checkStatus();
+    </script>
+</body>
+</html>
