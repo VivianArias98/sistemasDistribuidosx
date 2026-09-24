@@ -610,6 +610,10 @@ router.post(["/hotreload/:name", "/servers/:name/url"], (req, res) => {
 /**
  * GET /api/status — Estado consolidado de workers
  */
+router.get("/api/leader-info", (req, res) => {
+    res.json({ name: engine.selfId || "Admin" });
+});
+
 router.get("/api/status", (req, res) => {
     const now = Date.now();
     const clusterPeers = engine.knownPeers ? engine.knownPeers() : [];

@@ -113,16 +113,23 @@
         <div id="dashboard-view">
             <!-- Sidebar -->
             <div class="sidebar glass card">
-                <h3>Contactos</h3>
-                <div class="contact-list" id="contact-list">
+                <h3>Workers Conectados</h3>
+                <div class="contact-list" id="contact-list" style="max-height: 50%;">
                     <!-- Contacts will be loaded here -->
+                </div>
+                
+                <h3 style="margin-top: 1.5rem;">Mensaje Directo (URL)</h3>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+                    <input type="text" id="direct-url-input" placeholder="Ej: https://...ngrok.dev" style="font-size: 0.85rem; padding: 0.6rem;">
+                    <button id="btn-chat-url" style="padding: 0.6rem; font-size: 0.9rem;">Abrir Chat Directo</button>
                 </div>
             </div>
             
             <!-- Chat Area -->
             <div class="chat-area glass card">
-                <div class="chat-header">
-                    Hablando con: <span id="current-chat-name" style="color: var(--primary);">Nadie</span>
+                <div class="chat-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>Hablando con: <span id="current-chat-name" style="color: var(--primary);">Nadie</span></div>
+                    <button id="btn-clear-chat" style="width: auto; padding: 0.4rem 0.8rem; font-size: 0.8rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">Vaciar Chat</button>
                 </div>
                 
                 <div class="chat-messages" id="chat-messages">
@@ -146,12 +153,16 @@
         let allMessages = [];
         let contacts = [];
 
+        let currentLeaderUrl = "";
+        let currentLeaderName = "Admin";
+
         // DOM Elements
         const connectModal = document.getElementById("connect-modal");
         const dashboardView = document.getElementById("dashboard-view");
         const statusIndicator = document.getElementById("status-indicator");
         const appName = document.getElementById("app-name");
         const btnConnect = document.getElementById("btn-connect");
+        const btnClearChat = document.getElementById("btn-clear-chat");
         const errorText = document.getElementById("connect-error");
         
         // Fetch Initial Status
@@ -162,6 +173,11 @@
                 myName = data.name;
                 appName.textContent = data.name;
                 
+                if (currentLeaderUrl !== "" && currentLeaderUrl !== data.middlewareUrl) {
+                    alert(`🔀 ¡ALERTA! El líder de la red ha cambiado a:\n${data.middlewareUrl}`);
+                }
+                currentLeaderUrl = data.middlewareUrl;
+                
                 if (data.isConnected) {
                     showDashboard();
                 }
@@ -169,6 +185,8 @@
                 console.error("Error al obtener estado:", e);
             }
         }
+        
+        setInterval(checkStatus, 3000);
         
         // Connect Action
         btnConnect.addEventListener("click", async () => {
@@ -216,12 +234,13 @@
         async function fetchContacts() {
             if (!isConnected) return;
             try {
-                // Le pedimos al worker que consulte los workers del líder
                 const res = await fetch("/api/contacts");
                 if (res.ok) {
-                    const newContacts = await res.json();
-                    // Agregar siempre al Coordinador
-                    const list = [{ name: "Coordinador", isLeader: true }, ...newContacts.filter(c => c.name !== myName)];
+                    const data = await res.json();
+                    const newContacts = data.workers || [];
+                    currentLeaderName = data.leader || "Admin";
+                    
+                    const list = [{ name: `Coordinador (${currentLeaderName})`, isLeader: true, isCoord: true, actualName: "Coordinador" }, ...newContacts.filter(c => c.name !== myName)];
                     renderContacts(list);
                 }
             } catch (e) {}
@@ -229,6 +248,25 @@
         
         function renderContacts(list) {
             const container = document.getElementById("contact-list");
+            
+            // Extract unique contacts from message history
+            const historyContacts = new Set();
+            allMessages.forEach(m => {
+                let fName = m.from === currentLeaderName ? "Coordinador" : m.from;
+                let tName = m.to === currentLeaderName ? "Coordinador" : m.to;
+                
+                if (fName !== myName) historyContacts.add(fName);
+                if (tName !== myName) historyContacts.add(tName);
+            });
+
+            // Merge with API list (avoid duplicates)
+            const apiNames = new Set(list.map(c => c.actualName || c.name));
+            historyContacts.forEach(name => {
+                if (!apiNames.has(name) && name !== "Desconocido") {
+                    list.push({ name: name + " (Desconectado/Oculto)", actualName: name, isLeader: false });
+                }
+            });
+
             if(list.length === 0) {
                 container.innerHTML = '<div style="color:#94a3b8; font-size:0.9rem; text-align:center;">No hay contactos</div>';
                 return;
@@ -236,9 +274,10 @@
             
             let html = "";
             list.forEach(c => {
-                const isSelected = selectedContact === c.name;
+                const actualName = c.actualName || c.name;
+                const isSelected = selectedContact === actualName || selectedContact === c.name;
                 html += `
-                    <div class="contact-item ${isSelected ? 'active' : ''}" onclick="selectContact('${c.name}')">
+                    <div class="contact-item ${isSelected ? 'active' : ''}" onclick="selectContact('${actualName}')">
                         <span style="font-size: 1.2rem;">${c.isLeader ? '👑' : '👤'}</span>
                         <span>${c.name}</span>
                     </div>
@@ -262,6 +301,17 @@
             
             renderChat();
         };
+
+        // Direct URL Chat
+        document.getElementById("btn-chat-url").addEventListener("click", () => {
+            const url = document.getElementById("direct-url-input").value.trim();
+            if (url) {
+                // Add temporary visual contact
+                contacts.push({ name: url, isDirect: true });
+                selectContact(url);
+                document.getElementById("direct-url-input").value = "";
+            }
+        });
         
         async function fetchMessages() {
             if (!isConnected) return;
@@ -269,19 +319,29 @@
                 const res = await fetch("/messages");
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.length !== allMessages.length) {
-                        allMessages = data;
-                        renderChat();
-                    }
+                    allMessages = data;
+                    renderChat();
                 }
             } catch(e) {}
         }
+
+        btnClearChat.addEventListener("click", async () => {
+            if(confirm("¿Seguro que deseas vaciar todo el historial de chat?")) {
+                await fetch("/messages", { method: "DELETE" });
+                allMessages = [];
+                renderChat();
+            }
+        });
         
         function renderChat() {
             const container = document.getElementById("chat-messages");
             if (!selectedContact) return;
             
-            const msgs = allMessages.filter(m => m.from === selectedContact || m.to === selectedContact).reverse();
+            const msgs = allMessages.filter(m => {
+                let fName = m.from === currentLeaderName ? "Coordinador" : m.from;
+                let tName = m.to === currentLeaderName ? "Coordinador" : m.to;
+                return fName === selectedContact || tName === selectedContact;
+            }).reverse();
             
             if (msgs.length === 0) {
                 container.innerHTML = `<div style="text-align:center; color:#94a3b8; margin-top:2rem;">No hay mensajes con ${selectedContact}</div>`;
@@ -290,15 +350,21 @@
             
             container.innerHTML = msgs.map(m => {
                 const isMine = m.from === myName;
+                const displayName = m.from === currentLeaderName ? `👑 ${m.from}` : m.from;
+                
                 return `
                     <div class="bubble ${isMine ? 'mine' : 'theirs'}">
+                        <div style="font-size: 0.75rem; opacity: 0.7; margin-bottom: 0.3rem; font-weight: bold;">
+                            ${isMine ? myName : displayName}
+                        </div>
                         ${m.message}
                         <div class="bubble-time">${m.receivedAt || new Date(m.timestamp).toLocaleTimeString()}</div>
                     </div>
                 `;
             }).join('');
             
-            container.scrollTop = container.scrollHeight;
+            // Auto-scroll to bottom smoothly
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
         }
         
         document.getElementById("btn-send").addEventListener("click", sendMessage);
@@ -313,24 +379,13 @@
             
             input.value = "";
             
-            // Add optimistically to local array
-            const tempMsg = {
-                id: "temp_" + Date.now(),
-                from: myName,
-                to: selectedContact,
-                message: msg,
-                timestamp: Date.now(),
-                receivedAt: new Date().toLocaleTimeString()
-            };
-            allMessages.unshift(tempMsg);
-            renderChat();
-            
             try {
                 await fetch("/send-to", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ to: selectedContact, message: msg })
                 });
+                fetchMessages(); // Refrescar inmediatamente
             } catch (e) {
                 console.error("Error al enviar", e);
             }

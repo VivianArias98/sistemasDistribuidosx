@@ -28,4 +28,10 @@ node miniServer.js 4001 WorkerDeHayder https://semiyearly-alyce-otocystic.ngrok-
 
 
 worker vivian 
-node miniServer.js 3000 WorkerDeVivian https://backside-cufflink-reapprove.ngrok-free.dev https://semiyearly-alyce-otocystic.ngrok-free.dev
+node miniServer.js 3000 WorkerDeVivian https://backside-cufflink-reapprove.ngrok-free.dev
+
+
+
+WORKER HADYER
+node miniServer.js 3000 WorkerDeHayder https://semiyearly-alyce-otocystic.ngrok-free.dev
+

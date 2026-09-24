@@ -41,7 +41,7 @@ let MIDDLEWARE_URL = process.argv[5] || process.env.MIDDLEWARE_URL || "http://lo
 
 let pulseInterval = null;
 let isPulseActive = true;
-let receivedMessages = [];
+let allMessagesHistory = []; // Almacena tanto enviados como recibidos
 let knownPeers = []; // Para failover si el líder cae
 
 
@@ -64,7 +64,7 @@ app.get("/status", (req, res) => {
         platform: os.platform(),
         hostname: os.hostname(),
         isPulseActive,
-        messagesCount: receivedMessages.length,
+        messagesCount: allMessagesHistory.length,
         uptime: Math.floor(process.uptime()),
         isConnected: pulseInterval !== null
     });
@@ -85,13 +85,21 @@ app.post("/api/connect", async (req, res) => {
 });
 
 app.get("/api/contacts", async (req, res) => {
-    if (!MIDDLEWARE_URL) return res.json([]);
+    if (!MIDDLEWARE_URL) return res.json({ leader: "Admin", workers: [] });
     try {
+        let leaderName = "Admin";
+        try {
+            const leaderRes = await axios.get(`${MIDDLEWARE_URL}/api/leader-info`, { timeout: 2000 });
+            if (leaderRes.data && leaderRes.data.name) leaderName = leaderRes.data.name;
+        } catch (err) {
+            // Ignorar si falla el nuevo endpoint
+        }
+
         const response = await axios.get(`${MIDDLEWARE_URL}/api/status`, { timeout: 3000 });
         if (Array.isArray(response.data)) {
-            res.json(response.data);
+            res.json({ leader: leaderName, workers: response.data });
         } else {
-            res.json([]);
+            res.json({ leader: leaderName, workers: [] });
         }
     } catch (e) {
         res.status(500).json({ error: "No se pudo obtener contactos" });
@@ -112,12 +120,13 @@ app.post("/receive-message", (req, res) => {
     const entry = {
         id: "recv_" + Date.now(),
         from: from || "Desconocido",
+        to: NAME,
         message: message || "",
         timestamp: timestamp || Date.now(),
         receivedAt: new Date().toLocaleTimeString()
     };
 
-    receivedMessages.unshift(entry);
+    allMessagesHistory.unshift(entry);
 
     console.log("---------------------------------------------------------");
     console.log(`📥 [MENSAJE RECIBIDO]`);
@@ -135,10 +144,19 @@ app.post("/receive-message", (req, res) => {
 
 /**
  * GET /messages
- * Devuelve la lista de mensajes recibidos por este nodo
+ * Devuelve la lista de mensajes enviados y recibidos por este nodo
  */
 app.get("/messages", (req, res) => {
-    res.json(receivedMessages);
+    res.json(allMessagesHistory);
+});
+
+/**
+ * DELETE /messages
+ * Limpia el historial de mensajes
+ */
+app.delete("/messages", (req, res) => {
+    allMessagesHistory = [];
+    res.json({ success: true });
 });
 
 /**
@@ -176,6 +194,16 @@ app.post("/send-to", async (req, res) => {
             from: NAME,
             to,
             message
+        });
+
+        // Guardar en el historial local
+        allMessagesHistory.unshift({
+            id: "sent_" + Date.now(),
+            from: NAME,
+            to: to,
+            message: message,
+            timestamp: Date.now(),
+            receivedAt: new Date().toLocaleTimeString()
         });
 
         console.log(`📤 Mensaje enrutado hacia '${to}': "${message}" [OK]`);
