@@ -1331,12 +1331,47 @@ function renderDirectMessageHistory() {
     
     let html = "";
     
-    // Historial temporal optimista
+    const myId = mySelfId || "Coordinador";
+    const targetName = document.getElementById("dm-target-name-val").value;
+    
+    // Renderizamos el historial real
+    relevantMsgs.reverse().forEach(m => {
+        const isMine = m.from === myId || m.from === "Coordinador" || m.from.startsWith(myId);
+        const time = m.receivedAt || new Date(m.timestamp || Date.now()).toLocaleTimeString("es-MX", { hour12: false });
+        
+        if (m.isSystem) {
+            html += `
+                <div style="text-align:center; margin: 1rem 0;">
+                    <span style="background: var(--bg-3); color: var(--text-2); font-size: 0.8rem; padding: 6px 12px; border-radius: 20px;">
+                        ${escHtml(m.message)}
+                    </span>
+                </div>
+            `;
+            return;
+        }
+
+        const alignmentClass = isMine ? "mine" : "theirs";
+        const senderLabel = isMine ? "" : `<div style="font-size:0.75rem; opacity:0.7; margin-bottom:4px;">${escHtml(m.from)}</div>`;
+        
+        html += `
+            <div class="chat-bubble-wrapper ${alignmentClass}">
+                <div class="chat-bubble">
+                    ${senderLabel}
+                    ${escHtml(m.message)}
+                </div>
+                <span class="chat-time">${time}</span>
+            </div>
+        `;
+    });
+
+    // Añadir los temporales optimistas
     window.directMessageHistory.filter(m => m.targetUrl === targetUrl).forEach(m => {
         html += `
-            <div class="msg-bubble msg-out">
-                <div class="msg-text">${m.message}</div>
-                <div class="msg-meta">Para: ${document.getElementById("dm-target-name-val").value} • Justo ahora</div>
+            <div class="chat-bubble-wrapper mine">
+                <div class="chat-bubble">
+                    ${escHtml(m.message)}
+                </div>
+                <span class="chat-time">Justo ahora (enviando...)</span>
             </div>
         `;
     });
