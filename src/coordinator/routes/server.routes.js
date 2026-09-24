@@ -556,7 +556,17 @@ router.post("/api/send-message", async (req, res) => {
     try {
         const endpoint = targetUrl.replace(/\/$/, "") + "/receive-message";
         const axios = require("axios");
-        const resp = await axios.post(endpoint, { from, to, message, timestamp: entry.timestamp }, { 
+        
+        // Determinar fromUrl
+        let fromUrl = null;
+        if (from === engine.selfId || from === "Coordinador") {
+            fromUrl = engine.selfUrl;
+        } else {
+            const senderWorker = registry.resolve(from);
+            if (senderWorker) fromUrl = senderWorker.url;
+        }
+        
+        const resp = await axios.post(endpoint, { from, to, message, timestamp: entry.timestamp, fromUrl }, { 
             timeout: 4000,
             headers: { "ngrok-skip-browser-warning": "true" }
         });

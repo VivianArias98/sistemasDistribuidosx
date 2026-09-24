@@ -227,7 +227,51 @@ async function loadWorkers() {
         allWorkers = await r.json();
         renderWorkers(allWorkers);
         updateKpis();
+        updateChatAvailableContacts();
     } catch {}
+}
+
+async function updateChatAvailableContacts() {
+    const listEl = document.getElementById("chat-contacts-list");
+    if (!listEl) return;
+    
+    try {
+        const r = await fetch("/api/search-neighbors");
+        if (!r.ok) return;
+        
+        const data = await r.json();
+        const results = data.results || [];
+        
+        let html = "";
+        
+        results.forEach(c => {
+            if (c.role === "leader" || c.role === "follower" || c.role === "candidate") {
+                // Es un peer/coordinador
+                html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 1rem; background:rgba(255,255,255,0.05); border-radius:6px; cursor:pointer;" onmouseover="this.style.background='rgba(139, 92, 246, 0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" onclick="openDirectChat('${c.name}', '${c.url}')">
+                    <div>
+                        <strong>👑 ${c.name}</strong> <span style="font-size:0.75rem; color:var(--text-muted)">(${c.url})</span>
+                    </div>
+                    <span style="font-size:1.2rem;">👉</span>
+                </div>`;
+            } else {
+                // Es un worker
+                html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 1rem; background:rgba(255,255,255,0.03); border-radius:6px; cursor:pointer;" onmouseover="this.style.background='rgba(139, 92, 246, 0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'" onclick="openDirectChat('${c.name}', '${c.url}')">
+                    <div>
+                        <strong>👤 ${c.name}</strong> <span style="font-size:0.75rem; color:var(--text-muted)">(${c.url})</span>
+                    </div>
+                    <span style="font-size:1.2rem;">👉</span>
+                </div>`;
+            }
+        });
+
+        if (html === "") {
+            html = `<div style="color:var(--text-muted); font-size:0.85rem; padding: 0.5rem;">No hay contactos en la red aún.</div>`;
+        }
+        
+        listEl.innerHTML = html;
+    } catch (e) {
+        console.warn("Error fetching available contacts:", e);
+    }
 }
 
 function renderWorkers(workers) {
@@ -470,6 +514,8 @@ function renderPeers(peers, cluster) {
             </tr>
         `;
     }).join("");
+
+    updateChatAvailableContacts();
 }
 
 // ─── Desconectar Peer Manualmente ───────────────────────────────────────────
@@ -1243,3 +1289,108 @@ setInterval(() => {
         }
     }
 }, 3000);
+
+// ─── LÓGICA DE MENSAJES DIRECTOS (DM) ───────────────────────────────────────────
+window.directMessageHistory = [];
+
+function openDirectChat(name, url) {
+    document.getElementById("dm-target-name-val").value = name;
+    document.getElementById("dm-target-url-val").value = url;
+    document.getElementById("dm-current-name").textContent = "Chat con: " + name;
+    document.getElementById("dm-current-url").textContent = url;
+    
+    document.getElementById("dm-input").disabled = false;
+    document.getElementById("btn-dm-send").disabled = false;
+    
+    renderDirectMessageHistory();
+}
+
+function renderDirectMessageHistory() {
+    const historyDiv = document.getElementById("dm-history");
+    const targetUrl = document.getElementById("dm-target-url-val").value;
+    
+    if (!targetUrl) return;
+    
+    // Filtramos mensajes dirigidos o recibidos de esta URL/Nombre
+    const relevantMsgs = typeof allMessages !== 'undefined' ? allMessages.filter(m => 
+        (m.to === document.getElementById("dm-target-name-val").value) ||
+        (m.targetUrl === targetUrl) ||
+        (m.fromUrl === targetUrl) ||
+        (m.from === document.getElementById("dm-target-name-val").value)
+    ) : [];
+    
+    if (relevantMsgs.length === 0 && window.directMessageHistory.filter(m => m.targetUrl === targetUrl).length === 0) {
+        historyDiv.innerHTML = `
+            <div class="chat-placeholder-msg">
+                <span style="font-size: 2rem;">💬</span>
+                <span>Inicia la conversación.</span>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = "";
+    
+    // Historial temporal optimista
+    window.directMessageHistory.filter(m => m.targetUrl === targetUrl).forEach(m => {
+        html += `
+            <div class="msg-bubble msg-out">
+                <div class="msg-text">${m.message}</div>
+                <div class="msg-meta">Para: ${document.getElementById("dm-target-name-val").value} • Justo ahora</div>
+            </div>
+        `;
+    });
+    
+    historyDiv.innerHTML = html;
+    historyDiv.scrollTop = historyDiv.scrollHeight;
+}
+
+async function sendDirectMessage() {
+    const input = document.getElementById("dm-input");
+    const text = input.value.trim();
+    if (!text) return;
+    
+    const targetName = document.getElementById("dm-target-name-val").value;
+    const targetUrl = document.getElementById("dm-target-url-val").value;
+    
+    if (!targetUrl) return;
+    
+    input.value = "";
+    input.disabled = true;
+    document.getElementById("btn-dm-send").disabled = true;
+    
+    try {
+        const payload = {
+            from: mySelfId || "Coordinador",
+            to: targetName,
+            message: text,
+            directUrl: targetUrl
+        };
+        
+        // Guardar local optimista
+        window.directMessageHistory.push({
+            message: text,
+            targetUrl: targetUrl,
+            timestamp: Date.now()
+        });
+        
+        renderDirectMessageHistory();
+        
+        const r = await fetch("/api/send-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!r.ok) {
+            const data = await r.json();
+            alert("Error al enviar: " + (data.error || "Desconocido"));
+        }
+    } catch (e) {
+        alert("Error de red al enviar mensaje directo");
+    } finally {
+        input.disabled = false;
+        document.getElementById("btn-dm-send").disabled = false;
+        input.focus();
+    }
+}

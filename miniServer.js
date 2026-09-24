@@ -115,11 +115,12 @@ app.get("/api/contacts", async (req, res) => {
  * Endpoint donde este nodo recibe mensajes despachados por el Middleware u otros nodos.
  */
 app.post("/receive-message", (req, res) => {
-    const { from, message, timestamp } = req.body;
+    const { from, message, timestamp, fromUrl } = req.body;
 
     const entry = {
         id: "recv_" + Date.now(),
         from: from || "Desconocido",
+        fromUrl: fromUrl || null,
         to: NAME,
         message: message || "",
         timestamp: timestamp || Date.now(),
@@ -327,9 +328,10 @@ async function register(retryCount = 0) {
     } catch (error) {
         if (error.response && error.response.status === 409) {
             const data = error.response.data;
-            if (data.leader) {
-                console.log(`🔀 [REDIRECCIÓN] Este nodo no es el líder. El líder es: ${data.leader}. Redirigiendo...`);
+                if (data.leader) {
+                console.log(`🔀 [REDIRECCIÓN] Este nodo no es el líder. El líder es: ${data.leader}. Reconectando...`);
                 MIDDLEWARE_URL = data.leader.replace(/\/$/, "");
+                allMessagesHistory = []; // Borrar historial al cambiar de líder
                 if (data.peers && Array.isArray(data.peers)) knownPeers = data.peers;
                 return await register(retryCount + 1); // Intentar con el nuevo líder
             } else if (data.code === "IP_CONFLICT" || data.error?.includes("duplicado")) {
@@ -374,6 +376,7 @@ function startHeartbeatLoop() {
             if (error.response?.status === 409 && error.response?.data?.leader) {
                 console.log(`🔀 [REDIRECCIÓN] El líder cambió a: ${error.response.data.leader}. Reconectando...`);
                 MIDDLEWARE_URL = error.response.data.leader.replace(/\/$/, "");
+                allMessagesHistory = []; // Borrar historial al cambiar de líder
                 try { await register(); } catch (e) { }
             } else if (error.response?.data?.mustRegister) {
                 console.log("ℹ️ Re-registrando en el Servicio de Nombres (me eliminaron)...");
@@ -389,6 +392,7 @@ function startHeartbeatLoop() {
                         const nextPeer = availablePeers[Math.floor(Math.random() * availablePeers.length)];
                         MIDDLEWARE_URL = nextPeer.replace(/\/$/, "");
                         console.log(`🔌 Conectando al peer de respaldo: ${MIDDLEWARE_URL} ...`);
+                        allMessagesHistory = []; // Borrar historial al cambiar de líder
                         try { await register(); } catch (e) { }
                     }
                 }

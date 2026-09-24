@@ -231,6 +231,8 @@
             setInterval(fetchContacts, 5000); // refresh contacts periodically
         }
         
+        let workerUrls = {}; // Map of URL -> Name
+
         async function fetchContacts() {
             if (!isConnected) return;
             try {
@@ -239,6 +241,11 @@
                     const data = await res.json();
                     const newContacts = data.workers || [];
                     currentLeaderName = data.leader || "Admin";
+                    
+                    workerUrls = {};
+                    newContacts.forEach(c => {
+                        if (c.url) workerUrls[c.url.replace(/\/$/, "")] = c.name;
+                    });
                     
                     const list = [{ name: `Coordinador (${currentLeaderName})`, isLeader: true, isCoord: true, actualName: "Coordinador" }, ...newContacts.filter(c => c.name !== myName)];
                     renderContacts(list);
@@ -249,11 +256,31 @@
         function renderContacts(list) {
             const container = document.getElementById("contact-list");
             
+            // Map sender/receiver logic
+            const getMappedName = (m, field) => {
+                const originalName = m[field];
+                if (originalName === myName) return originalName;
+                
+                // Si la URL de origen es igual a la del líder, es el Coordinador.
+                if (m.fromUrl) {
+                    const normalizedUrl = m.fromUrl.replace(/\/$/, "");
+                    if (normalizedUrl === currentLeaderUrl.replace(/\/$/, "")) {
+                        return "Coordinador";
+                    }
+                    if (workerUrls[normalizedUrl]) {
+                        return workerUrls[normalizedUrl];
+                    }
+                }
+                
+                // Fallback por nombre
+                return originalName === currentLeaderName ? "Coordinador" : originalName;
+            };
+
             // Extract unique contacts from message history
             const historyContacts = new Set();
             allMessages.forEach(m => {
-                let fName = m.from === currentLeaderName ? "Coordinador" : m.from;
-                let tName = m.to === currentLeaderName ? "Coordinador" : m.to;
+                let fName = getMappedName(m, 'from');
+                let tName = getMappedName(m, 'to');
                 
                 if (fName !== myName) historyContacts.add(fName);
                 if (tName !== myName) historyContacts.add(tName);
@@ -337,9 +364,20 @@
             const container = document.getElementById("chat-messages");
             if (!selectedContact) return;
             
+            const getMappedName = (m, field) => {
+                const originalName = m[field];
+                if (originalName === myName) return originalName;
+                if (m.fromUrl) {
+                    const normalizedUrl = m.fromUrl.replace(/\/$/, "");
+                    if (normalizedUrl === currentLeaderUrl.replace(/\/$/, "")) return "Coordinador";
+                    if (workerUrls[normalizedUrl]) return workerUrls[normalizedUrl];
+                }
+                return originalName === currentLeaderName ? "Coordinador" : originalName;
+            };
+
             const msgs = allMessages.filter(m => {
-                let fName = m.from === currentLeaderName ? "Coordinador" : m.from;
-                let tName = m.to === currentLeaderName ? "Coordinador" : m.to;
+                let fName = getMappedName(m, 'from');
+                let tName = getMappedName(m, 'to');
                 return fName === selectedContact || tName === selectedContact;
             }).reverse();
             

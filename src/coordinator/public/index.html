@@ -423,39 +423,84 @@
                 <!-- PESTAÑA 4: CHAT DEDICADO -->
                 <!-- ============================================================== -->
                 <div class="tab-panel" id="view-panel-chat">
-                    <div class="chat-container">
-                        <!-- Encabezado y Formulario de Conexión (Siempre visible) -->
-                        <div id="chat-connect-screen" class="chat-header" style="flex-shrink:0; display:flex; flex-direction:column; gap:1rem; padding: 1.5rem; background: var(--bg-2); border-bottom: 1px solid var(--border);">
-                            <div style="display:flex; align-items:center; gap: 1rem;">
-                                <div class="chat-header-name" id="chat-current-name">Conectar al Líder</div>
-                                <span class="badge" id="chat-current-status" style="display:none; font-size:0.75rem; background: rgba(16,217,133,0.15); color: var(--green); padding: 4px 10px; border-radius: 20px;"></span>
+                    <div style="display: flex; flex-direction: column; gap: 2rem; width: 100%;">
+                        
+                        <!-- SECCIÓN 1: CHAT EXCLUSIVO CON EL LÍDER (POR URL) -->
+                        <div class="chat-container card" style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display:flex; flex-direction:column; height: 350px; flex-shrink: 0;">
+                            <!-- Encabezado y Formulario de Conexión -->
+                            <div id="chat-connect-screen" class="chat-header" style="flex-shrink:0; display:flex; flex-direction:column; gap:1rem; padding: 1.5rem; background: var(--bg-2); border-bottom: 1px solid var(--border);">
+                                <div style="display:flex; align-items:center; justify-content: space-between;">
+                                    <div style="display:flex; align-items:center; gap: 1rem;">
+                                        <div class="chat-header-name" id="chat-current-name">👑 Chat Exclusivo con el Líder</div>
+                                        <span class="badge" id="chat-current-status" style="display:none; font-size:0.75rem; background: rgba(16,217,133,0.15); color: var(--green); padding: 4px 10px; border-radius: 20px;"></span>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-ghost" id="btn-chat-disconnect" style="display:none;" onclick="disconnectLeaderChat()">✕ Desconectar</button>
+                                        <button class="btn btn-ghost" id="btn-chat-clear" style="display:none; color: var(--red);" onclick="clearChat()">🗑️ Limpiar</button>
+                                    </div>
+                                </div>
+                                <div style="display:flex; gap:0.75rem; width: 100%;">
+                                    <input type="url" id="chat-ngrok-url" class="input" style="flex:1;" placeholder="Ingresa la URL pública (ngrok) del líder..." onkeypress="if(event.key === 'Enter') connectToLeaderChat()">
+                                    <button class="btn btn-primary" onclick="connectToLeaderChat()">Conectar 🚀</button>
+                                </div>
+                                <div id="chat-connect-status" style="color: var(--text-3); font-size: 0.9rem; min-height: 1em;"></div>
                             </div>
-                            <div style="display:flex; gap:0.75rem; width: 100%;">
-                                <input type="url" id="chat-ngrok-url" class="input" style="flex:1;" placeholder="Ingresa la URL pública (ngrok) del líder..." onkeypress="if(event.key === 'Enter') connectToLeaderChat()">
-                                <button class="btn btn-primary" onclick="connectToLeaderChat()">Conectar 🚀</button>
-                                <button class="btn btn-ghost" id="btn-chat-disconnect" style="display:none;" onclick="disconnectLeaderChat()">✕ Desconectar</button>
-                                <button class="btn btn-ghost" id="btn-chat-clear" style="display:none; color: var(--red);" onclick="clearChat()">🗑️ Limpiar</button>
-                            </div>
-                            <div id="chat-connect-status" style="color: var(--text-3); font-size: 0.9rem; min-height: 1em;"></div>
-                        </div>
 
-                        <!-- PASO 2: Chat activo (oculto inicialmente) -->
-                        <div id="chat-active-screen" style="display:none; flex:1; flex-direction:column; width:100%;">
-                            
-                            <!-- Historial de mensajes -->
-                            <div class="chat-history" id="chat-history">
-                                <div class="chat-placeholder-msg">
-                                    <span style="font-size: 2rem;">💬</span>
-                                    <span>Conectado. Escribe un mensaje para el líder.</span>
+                            <!-- Chat activo -->
+                            <div id="chat-active-screen" style="display:none; flex:1; flex-direction:column; width:100%; min-height:0;">
+                                <!-- Historial de mensajes -->
+                                <div class="chat-history" id="chat-history" style="flex:1; overflow-y:auto; padding: 1.5rem;">
+                                    <div class="chat-placeholder-msg">
+                                        <span style="font-size: 2rem;">💬</span>
+                                        <span>Conectado al Líder. Escribe un mensaje.</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Input de mensaje -->
+                                <div class="chat-input-area" style="flex-shrink:0; padding:1rem; background:var(--bg-2); border-top: 1px solid var(--border); display:flex; gap:0.5rem;">
+                                    <input type="text" id="chat-dedicated-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje al líder..." onkeypress="if(event.key === 'Enter') sendDedicatedMessage()">
+                                    <button class="btn btn-primary" id="btn-chat-send" onclick="sendDedicatedMessage()">Enviar 💬</button>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- SECCIÓN 2: MENSAJE DIRECTO (A cualquier contacto) -->
+                        <div class="chat-container card" style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display:flex; height: 450px; flex-shrink: 0;">
                             
-                            <!-- Input de mensaje -->
-                            <div class="chat-input-area" style="flex-shrink:0;">
-                                <input type="text" id="chat-dedicated-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje al líder..." onkeypress="if(event.key === 'Enter') sendDedicatedMessage()">
-                                <button class="btn btn-primary" id="btn-chat-send" onclick="sendDedicatedMessage()">Enviar 💬</button>
+                            <!-- Sidebar Contactos -->
+                            <div style="width: 320px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-2);">
+                                <div style="padding: 1.2rem; border-bottom: 1px solid var(--border);">
+                                    <h3 style="margin: 0; font-size: 1.1rem;">Contactos en la Red</h3>
+                                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem;">Haz clic para iniciar mensaje directo</p>
+                                </div>
+                                <div id="chat-available-contacts" style="flex: 1; overflow-y: auto; padding: 1rem;">
+                                    <div id="chat-contacts-list" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Chat Activo Directo -->
+                            <div style="flex: 1; display:flex; flex-direction:column; background: var(--bg-1);">
+                                <div class="chat-header" style="padding: 1.5rem; background: var(--bg-1); border-bottom: 1px solid var(--border);">
+                                    <div class="chat-header-name" id="dm-current-name">Mensaje Directo</div>
+                                    <div id="dm-current-url" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem;">Selecciona un contacto a la izquierda</div>
+                                </div>
+                                
+                                <div class="chat-history" id="dm-history" style="flex:1; overflow-y:auto; padding: 1.5rem;">
+                                    <div class="chat-placeholder-msg">
+                                        <span style="font-size: 2rem;">👤</span>
+                                        <span>Selecciona un contacto para iniciar un chat directo.</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="chat-input-area" style="flex-shrink:0; padding:1rem; background:var(--bg-2); border-top: 1px solid var(--border); display:flex; gap:0.5rem;">
+                                    <input type="hidden" id="dm-target-name-val">
+                                    <input type="hidden" id="dm-target-url-val">
+                                    <input type="text" id="dm-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje directo..." disabled onkeypress="if(event.key === 'Enter') sendDirectMessage()">
+                                    <button class="btn btn-primary" id="btn-dm-send" onclick="sendDirectMessage()" disabled>Enviar 💬</button>
+                                </div>
                             </div>
                         </div>
+
                     </div>
                 </div>
 
