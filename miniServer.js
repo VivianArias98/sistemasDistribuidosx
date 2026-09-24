@@ -3,6 +3,17 @@ const axios = require("axios");
 const os = require("os");
 const readline = require("readline");
 
+const askQuestion = (query) => {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+    return new Promise(resolve => rl.question(query, ans => {
+        rl.close();
+        resolve(ans);
+    }));
+};
+
 const app = express();
 app.use(express.json());
 
@@ -282,6 +293,16 @@ async function register(retryCount = 0) {
                 console.error(`   ${data.error}`);
                 console.error("=========================================================");
                 throw error;
+            }
+        }
+
+        if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED') || error.response?.status >= 500) {
+            console.error(`❌ [ERROR] El servidor en ${MIDDLEWARE_URL} no está encendido o no responde.`);
+            const newUrl = await askQuestion("🔗 Ingresa la nueva URL a la que te vas a conectar (Ej: https://...): ");
+            if (newUrl && newUrl.trim()) {
+                MIDDLEWARE_URL = newUrl.trim().replace(/\/$/, "");
+                console.log(`🔄 Intentando conectar a la nueva URL: ${MIDDLEWARE_URL} ...`);
+                return await register(retryCount); // Reintentar con la nueva URL sin aumentar el contador (porque es un cambio manual)
             }
         }
 
