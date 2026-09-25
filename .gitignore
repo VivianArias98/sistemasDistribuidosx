@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 cosas debe tenr/
 
+
+# Antigravity/AI Agent skills
+.agents/
