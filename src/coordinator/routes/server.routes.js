@@ -139,7 +139,7 @@ router.post("/register", (req, res, next) => {
         const msg  = created       ? `Worker '${name}' registrado exitosamente`
                    : reactivated   ? `Worker '${name}' reactivado exitosamente`
                    :                 `Worker '${name}' reconectado exitosamente`;
-        return res.status(code).json({ message: msg, status: "ACTIVO", worker });
+        return res.status(code).json({ message: msg, status: "ACTIVO", worker, leaderId: engine.selfId });
     } catch (err) {
         if (err.code === "IP_CONFLICT") {
             return res.status(409).json({ error: err.message, code: "IP_CONFLICT" });

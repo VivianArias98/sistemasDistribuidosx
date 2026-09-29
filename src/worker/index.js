@@ -24,8 +24,9 @@ let COORDINATORS = (process.env.COORDINATORS || "http://localhost:3001")
     .split(",").map(u => u.trim()).filter(Boolean);
 
 // ─── Estado global del worker ─────────────────────────────────────────────────
-let status    = "iniciando";    // iniciando | registrado | buscando | apagado
-let parentUrl = null;           // URL del coordinador actual (líder)
+let status     = "iniciando";    // iniciando | registrado | buscando | apagado
+let parentUrl  = null;           // URL del coordinador actual (líder)
+let parentName = "Coordinador";  // Nombre del líder
 
 // ─── Inbox local ──────────────────────────────────────────────────────────────
 const inbox = [];
@@ -77,7 +78,7 @@ async function huntForLeader() {
                 
                 if (resp.status === 200 || resp.status === 201) {
                     logger.hunt(`✅ Líder encontrado y registrado: ${url}`);
-                    return url; // Era el líder y nos registró
+                    return { url, name: responseData.leaderId || "Coordinador" };
                 }
                 
                 logger.hunt(`${url} respondió código ${resp.status}, continuando...`);
@@ -141,8 +142,11 @@ async function mainLoop() {
     while (status !== "apagado") {
         try {
             // 1. Buscar líder
-            const leaderUrl = await huntForLeader();
-            if (!leaderUrl || status === "apagado") break;
+            const leaderData = await huntForLeader();
+            if (!leaderData || status === "apagado") break;
+            
+            const leaderUrl = typeof leaderData === "string" ? leaderData : leaderData.url;
+            parentName = typeof leaderData === "string" ? "Coordinador" : leaderData.name;
 
             // 2. Registrarse
             await registerWithCoordinator(leaderUrl);
@@ -271,7 +275,7 @@ app.post("/api/connect", async (req, res) => {
 });
 
 app.get("/api/contacts", (req, res) => {
-    res.json({ leader: parentUrl || "Desconectado", workers: [] });
+    res.json({ leader: parentName !== "Coordinador" ? parentName : (parentUrl || "Desconectado"), workers: [] });
 });
 
 app.post("/send-to", async (req, res) => {
