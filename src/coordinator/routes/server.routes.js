@@ -653,19 +653,32 @@ router.delete("/api/messages", (req, res) => {
 // ─── WORKLOAD (TAREAS) ────────────────────────────────────────────────────────
 
 router.post("/api/assign-task", ensureLeader, async (req, res) => {
-    const { type, payload } = req.body;
+    const { type, payload, targetWorker } = req.body;
     if (!type) return res.status(400).json({ error: "Se requiere 'type'" });
 
-    // Encontrar workers activos que tengan esta capacidad
-    const activeWorkers = registry.list().filter(w => w.status === "ACTIVO" && w.capabilities && w.capabilities.includes(type));
-    
-    if (activeWorkers.length === 0) {
-        return res.status(404).json({ error: `No hay workers activos con la capacidad '${type}'` });
-    }
+    let selectedWorker = null;
 
-    // Seleccionar el worker con menor carga (load)
-    activeWorkers.sort((a, b) => (a.load || 0) - (b.load || 0));
-    const selectedWorker = activeWorkers[0];
+    if (targetWorker) {
+        // Asignación directa (ej. desde el chat)
+        selectedWorker = registry.resolve(targetWorker);
+        if (!selectedWorker || selectedWorker.status !== "ACTIVO") {
+            return res.status(404).json({ error: `El worker '${targetWorker}' no existe o no está ACTIVO` });
+        }
+        if (selectedWorker.capabilities && !selectedWorker.capabilities.includes(type)) {
+            return res.status(400).json({ error: `El worker '${targetWorker}' no soporta la tarea '${type}'` });
+        }
+    } else {
+        // Asignación automática por balanceo de carga
+        const activeWorkers = registry.list().filter(w => w.status === "ACTIVO" && w.capabilities && w.capabilities.includes(type));
+        
+        if (activeWorkers.length === 0) {
+            return res.status(404).json({ error: `No hay workers activos con la capacidad '${type}'` });
+        }
+
+        // Seleccionar el worker con menor carga (load)
+        activeWorkers.sort((a, b) => (a.load || 0) - (b.load || 0));
+        selectedWorker = activeWorkers[0];
+    }
 
     const taskId = `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     

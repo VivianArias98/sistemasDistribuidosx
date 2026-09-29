@@ -344,8 +344,18 @@
                                 </div>
                             </div>
                             
-                            <div class="chat-input-area" style="flex-shrink:0; border-top: 1px solid var(--border); padding: 1rem; display: flex; gap: 0.75rem; background: var(--bg-2);">
-                                <input type="text" id="chat-leader-input" class="input" style="flex: 1;" placeholder="Selecciona un contacto para responder..." onkeypress="if(event.key === 'Enter') sendLeaderMessage()" disabled>
+                            <div class="chat-input-area" style="flex-shrink:0; border-top: 1px solid var(--border); padding: 1rem; display: flex; gap: 0.75rem; background: var(--bg-2); align-items: center;">
+                                <select id="chat-leader-assign-task" class="input" style="flex: 0 0 160px; font-size: 0.85rem; padding: 0.5rem;" onchange="fillTaskMessageFromChat()">
+                                    <option value="">-- Asignar tarea --</option>
+                                    <option value="math_compute">math_compute</option>
+                                    <option value="http_fetch">http_fetch</option>
+                                    <option value="search_text">search_text</option>
+                                    <option value="stats_compute">stats_compute</option>
+                                    <option value="vector_distance">vector_distance</option>
+                                    <option value="http_latency">http_latency</option>
+                                    <option value="reverse_string">reverse_string</option>
+                                </select>
+                                <input type="text" id="chat-leader-input" class="input" style="flex: 1;" placeholder="Escribe un mensaje o asigna una tarea..." onkeypress="if(event.key === 'Enter') sendLeaderMessage()" disabled>
                                 <button class="btn btn-primary" id="btn-leader-send" onclick="sendLeaderMessage()" disabled>Enviar 💬</button>
                             </div>
                         </div>

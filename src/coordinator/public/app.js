@@ -1248,9 +1248,10 @@ window.selectLeaderContact = function(contactId) {
 
 async function sendLeaderMessage() {
     const input = document.getElementById("chat-leader-input");
+    const taskSelect = document.getElementById("chat-leader-assign-task");
     if (!currentLeaderChatContact || !input) return;
 
-    const msg = input.value.trim();
+    let msg = input.value.trim();
     if (!msg) return;
 
     input.value = ""; 
@@ -1261,18 +1262,51 @@ async function sendLeaderMessage() {
     document.getElementById("btn-leader-send").disabled = true;
 
     try {
-        const r = await fetch("/api/send-message", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            // Enviamos el mensaje sin directUrl, para que el backend lo enrute usando el Naming Service o Engine
-            body: JSON.stringify({ from: myId, to: currentLeaderChatContact, message: msg })
-        });
-        
-        if (r.ok) {
-            await loadMessages();
+        if (taskSelect && taskSelect.value !== "") {
+            // Es una asignación de tarea directa desde el chat
+            const type = taskSelect.value;
+            let payload = {};
+            try {
+                payload = JSON.parse(msg);
+            } catch(e) {
+                // Si no escribieron JSON, usar payload vacío
+                payload = { data: msg };
+            }
+            
+            const r = await fetch("/api/assign-task", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type, payload, targetWorker: currentLeaderChatContact })
+            });
+            const data = await r.json();
+            if (r.ok) {
+                showToast(`Tarea despachada a ${data.worker}`, "success");
+                // Resetear select
+                taskSelect.value = "";
+                // Simular el mensaje en el chat para que el líder vea que lo envió
+                await fetch("/api/send-message", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ from: myId, to: currentLeaderChatContact, message: `[SISTEMA] Te he asignado la tarea: ${type}` })
+                });
+                await loadMessages();
+            } else {
+                showToast("Error al asignar tarea: " + (data.error || "Desconocido"), "error");
+            }
         } else {
-            const err = await r.json();
-            showToast("Error al enviar: " + (err.error || "Desconocido"), "error");
+            // Es un mensaje de chat normal
+            const r = await fetch("/api/send-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ from: myId, to: currentLeaderChatContact, message: msg })
+            });
+            
+            if (r.ok) {
+                await loadMessages();
+            } else {
+                const err = await r.json();
+                showToast("Error al enviar: " + (err.error || "Desconocido"), "error");
+            }
         }
     } catch (err) {
         showToast("Error de red: " + err.message, "error");
@@ -1282,6 +1316,24 @@ async function sendLeaderMessage() {
         input.focus();
     }
 }
+
+window.fillTaskMessageFromChat = function() {
+    const sel = document.getElementById("chat-leader-assign-task");
+    const input = document.getElementById("chat-leader-input");
+    if (!sel || !input) return;
+    
+    if (sel.value === "vector_distance") {
+        input.value = '{"a":[0,0],"b":[3,4]}';
+    } else if (sel.value === "math_compute") {
+        input.value = '{"operation":"add","args":[5, 10]}';
+    } else if (sel.value === "reverse_string") {
+        input.value = '{"str":"hola mundo"}';
+    } else if (sel.value !== "") {
+        input.value = '{}';
+    } else {
+        input.value = '';
+    }
+};
 
 window.appendChatBubble = function(ev) {
     if (currentLeaderContact || window.nodeRole === 'leader') loadMessages();
