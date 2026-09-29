@@ -372,10 +372,10 @@ function startInteractiveChat() {
 }
 
 app.get("/task/capabilities", (req, res) => {
-    // Retorna dinámicamente todas las capacidades soportadas:
-    // integradas (examen) + las registradas en runtime
+    // Retorna SOLO las capacidades declaradas por ESTE worker
+    // (no todas las implementadas en el service — cada worker declara las suyas)
     res.json({
-        capabilities: tasks.getSupportedCapabilities()
+        capabilities: DEFAULT_CAPABILITIES
     });
 });
 
@@ -391,6 +391,32 @@ app.post("/task/assign", async (req, res) => {
 
     const { taskId, type: taskType, payload } = reqBody.data;
     if (!taskId || !taskType) return res.status(400).json({ error: "Falta taskId o type" });
+
+    // ✔️ GUARDIA DE CAPACIDADES: verificar que este worker puede hacer la tarea
+    // Si no está en las capacidades declaradas, retornar error inmediato al coordinador
+    if (!DEFAULT_CAPABILITIES.includes(taskType)) {
+        const errorResult = {
+            type: "task-result",
+            data: {
+                taskId,
+                status: "error",
+                error: `Este worker no puede realizar la tarea '${taskType}'. Mis capacidades son: [${DEFAULT_CAPABILITIES.join(", ")}]`
+            }
+        };
+        logger.warn(`Tarea rechazada: '${taskType}' no está en mis capacidades`);
+        journal.record("tarea_rechazada", { taskId, taskType });
+        // Responder al coordinador con HTTP 200 (aceptamos el mensaje) y enviar el error por task-result
+        res.json({ ok: true, message: "Tarea rechazada: capacidad no soportada" });
+        if (parentUrl) {
+            try {
+                console.log("📤 [JSON ENVIADO - RECHAZO]:", JSON.stringify(errorResult, null, 2));
+                await axios.post(`${parentUrl}/task/receive?workerId=${WORKER_NAME}`, errorResult, { timeout: 3000 });
+            } catch (e) {
+                logger.error(`No se pudo notificar rechazo de ${taskId}: ${e.message}`);
+            }
+        }
+        return;
+    }
 
     // Responder inmediatamente para liberar al coordinador
     res.json({ ok: true, message: "Tarea encolada" });

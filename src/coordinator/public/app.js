@@ -371,8 +371,9 @@ function renderWorkers(workers) {
         let displayUrl = w.url;
         let isPeer = false;
         
-        // Si no tiene localPort, es un peer disfrazado de worker que entró por Naming Service
-        if (!w.localPort) {
+        // Si no tiene localPort Y no tiene capabilities, es un peer disfrazado de worker
+        // Un worker real puede conectarse sin localPort (ej: via ngrok) pero declara capabilities
+        if (!w.localPort && (!w.capabilities || w.capabilities.length === 0)) {
             isPeer = true;
         }
 
@@ -426,26 +427,6 @@ function renderWorkers(workers) {
         }
     });
 
-// ─── Pedir Presentación a un Worker ──────────────────────────────────────────────
-async function requestPresentation(workerName) {
-    showToast(`🎤 Solicitando presentación de '${workerName}'...`, "info");
-    try {
-        const r = await fetch(`/api/request-presentation/${encodeURIComponent(workerName)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" }
-        });
-        const data = await r.json();
-        if (r.ok) {
-            showToast(`✅ '${workerName}' se presentó: [${(data.capabilities || []).join(", ")}]`, "success");
-            await loadMessages();
-        } else {
-            showToast(`❌ Error: ${data.error || "No se pudo obtener presentación"}`, "error");
-        }
-    } catch (err) {
-        showToast(`❌ Error de red: ${err.message}`, "error");
-    }
-}
-
     if (peersHtml === "") {
         peersHtml = '<tr><td colspan="6" class="empty-cell">Sin peers entrantes registrados aún...</td></tr>';
     }
@@ -460,6 +441,28 @@ async function requestPresentation(workerName) {
 
     updateMessageDropdown();
     if (typeof updateChatContacts === "function") updateChatContacts();
+}
+
+// ─── Pedir Presentación a un Worker ──────────────────────────────────────────
+async function requestPresentation(workerName) {
+    showToast(`🎤 Solicitando presentación de '${workerName}'...`, "info");
+    try {
+        const r = await fetch(`/api/request-presentation/${encodeURIComponent(workerName)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        });
+        const data = await r.json();
+        if (r.ok) {
+            showToast(`✅ '${workerName}' tiene: [${(data.capabilities || []).join(", ")}]`, "success");
+            // Ir al chat del líder para ver la respuesta
+            switchViewTab("incoming");
+            await loadMessages();
+        } else {
+            showToast(`❌ Error: ${data.error || "No se pudo obtener presentación"}`, "error");
+        }
+    } catch (err) {
+        showToast(`❌ Error de red: ${err.message}`, "error");
+    }
 }
 
 // ─── Poll: cluster (peers) ────────────────────────────────
