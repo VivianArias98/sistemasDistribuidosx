@@ -197,6 +197,12 @@ const htmlUI = `
                 <input type="text" id="codigo" placeholder="ej: 55217003" required>
             </div>
 
+            <div class="form-group">
+                <label id="url-label">URL de otro Coordinador</label>
+                <input type="text" id="urls" placeholder="ej: https://...ngrok.dev">
+                <div class="help-text" id="url-help">Deja en blanco si eres el primer coordinador.</div>
+            </div>
+
             <button type="submit" class="submit-btn">Inicializar Nodo 🚀</button>
         </form>
     </div>
@@ -209,9 +215,15 @@ const htmlUI = `
             if(role === 'coordinator') {
                 document.getElementById('btn-coord').classList.add('active');
                 document.getElementById('btn-coord').querySelector('input').checked = true;
+                document.getElementById('url-label').textContent = 'URL de otro Coordinador';
+                document.getElementById('url-help').textContent = 'Deja en blanco si eres el primer coordinador del clúster.';
+                document.getElementById('urls').required = false;
             } else {
                 document.getElementById('btn-worker').classList.add('active');
                 document.getElementById('btn-worker').querySelector('input').checked = true;
+                document.getElementById('url-label').textContent = 'URL del Coordinador al que te conectarás';
+                document.getElementById('url-help').textContent = 'Obligatorio para los trabajadores.';
+                document.getElementById('urls').required = true;
             }
         }
 
@@ -221,6 +233,7 @@ const htmlUI = `
             const role = document.querySelector('input[name="role"]:checked').value;
             const nombre = document.getElementById('nombre').value;
             const codigo = document.getElementById('codigo').value;
+            const urls = document.getElementById('urls').value;
 
             document.getElementById('setup-form').style.display = 'none';
             document.getElementById('loading-overlay').style.display = 'flex';
@@ -232,7 +245,7 @@ const htmlUI = `
                 const res = await fetch('/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ role, nombre, codigo })
+                    body: JSON.stringify({ role, nombre, codigo, urls })
                 });
                 
                 if (res.ok) {
@@ -263,7 +276,7 @@ app.get('*', (req, res) => {
 let server;
 
 app.post('/start', (req, res) => {
-    const { role, nombre, codigo } = req.body;
+    const { role, nombre, codigo, urls } = req.body;
     
     const roleName = role === 'worker' ? 'worker' : 'coordinator';
     const id = `${roleName}-${nombre.trim()}-${codigo.trim()}`;
@@ -271,6 +284,7 @@ app.post('/start', (req, res) => {
     console.log(`\nIniciando configuración desde UI web...`);
     console.log(`Rol: ${roleName}`);
     console.log(`ID: ${id}`);
+    if (urls) console.log(`URLs objetivo: ${urls}`);
 
     const env = {
         ...process.env,
@@ -281,6 +295,14 @@ app.post('/start', (req, res) => {
         NODE_ID: id,
         WORKER_NAME: id
     };
+
+    if (urls && urls.trim()) {
+        if (role === 'worker') {
+            env.COORDINATORS = urls.trim();
+        } else {
+            env.PEERS = urls.trim();
+        }
+    }
 
     const scriptPath = role === 'worker' 
         ? path.join(__dirname, 'src', 'worker', 'index.js')
