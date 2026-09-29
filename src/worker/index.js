@@ -218,11 +218,12 @@ app.post("/send-message", async (req, res) => {
 });
 
 app.post("/receive-message", (req, res) => {
-    const { from, message, timestamp } = req.body;
+    const { from, message, timestamp, fromUrl } = req.body;
     if (!message) return res.status(400).json({ error: "Se requiere 'message'" });
     const entry = {
         id: "recv_" + Date.now(),
         from: from || "desconocido",
+        fromUrl: fromUrl || null,
         to: WORKER_NAME,
         message: message,
         timestamp: timestamp || Date.now(),

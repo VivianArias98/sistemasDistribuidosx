@@ -261,19 +261,20 @@
                 const originalName = m[field];
                 if (originalName === myName) return originalName;
                 
-                // Si la URL de origen es igual a la del líder, es el Coordinador.
+                // Si el nombre original indica que es un coordinador explícitamente
+                if (originalName === currentLeaderName || originalName.toLowerCase().includes("coordinator")) {
+                    return "Coordinador";
+                }
+                
                 if (m.fromUrl) {
                     const normalizedUrl = m.fromUrl.replace(/\/$/, "");
-                    if (normalizedUrl === currentLeaderUrl.replace(/\/$/, "")) {
-                        return "Coordinador";
-                    }
-                    if (workerUrls[normalizedUrl]) {
+                    
+                    if (workerUrls[normalizedUrl] && workerUrls[normalizedUrl] !== originalName) {
                         return workerUrls[normalizedUrl];
                     }
                 }
                 
-                // Fallback por nombre
-                return originalName === currentLeaderName ? "Coordinador" : originalName;
+                return originalName;
             };
 
             // Extract unique contacts from message history
