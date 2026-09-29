@@ -189,7 +189,7 @@ const htmlUI = `
 
             <div class="form-group">
                 <label>Tu Nombre</label>
-                <input type="text" id="nombre" placeholder="ej: hayder" required>
+                <input type="text" id="nombre" placeholder=" ej: xxxx" required>
             </div>
 
             <div class="form-group">
@@ -277,7 +277,7 @@ let server;
 
 app.post('/start', (req, res) => {
     const { role, nombre, codigo, urls } = req.body;
-    
+
     const roleName = role === 'worker' ? 'worker' : 'coordinator';
     const id = `${roleName}-${nombre.trim()}-${codigo.trim()}`;
 
@@ -304,7 +304,7 @@ app.post('/start', (req, res) => {
         }
     }
 
-    const scriptPath = role === 'worker' 
+    const scriptPath = role === 'worker'
         ? path.join(__dirname, 'src', 'worker', 'index.js')
         : path.join(__dirname, 'src', 'coordinator', 'server.js');
 
@@ -314,7 +314,7 @@ app.post('/start', (req, res) => {
     // Apagamos este servidor temporal y lanzamos el hijo
     server.close(() => {
         console.log(`\nCambiando control al ${roleName} en puerto ${port}...`);
-        
+
         const child = spawn('node', [scriptPath], { stdio: 'inherit', env });
 
         child.on('close', (code) => {
