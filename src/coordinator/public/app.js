@@ -241,8 +241,22 @@ function updateTaskDropdown(workers) {
     const chatTaskSelect = document.getElementById("chat-leader-assign-task");
     if (!taskSelect) return;
 
-    // Recolectar todas las capacidades únicas de workers activos
-    const allCaps = new Set();
+    // ── Lista BASE fija: TODAS las tareas del examen (sección 9) + comunes
+    // El coordinador siempre puede asignar cualquier tarea conocida.
+    // El balanceador ya se encarga de encontrar al worker correcto.
+    const ALL_KNOWN_TASKS = [
+        "math_compute",      // 9.1 - Calculadora
+        "http_fetch",        // 9.2 - Fetch HTTP
+        "search_text",       // 9.3 - Búsqueda en texto
+        "stats_compute",     // 9.4 - Estadísticas
+        "vector_distance",   // 9.5 - Distancia vectorial
+        "http_latency",      // 9.6 - Latencia HTTP
+        "random_number",     // Capacidad propia
+        "reverse_string",    // Capacidad extra
+    ];
+
+    // Recolectar capacidades extra de workers activos (desconocidas/nuevas)
+    const allCaps = new Set(ALL_KNOWN_TASKS);
     (workers || []).forEach(w => {
         if (w.status === "ACTIVO" && Array.isArray(w.capabilities)) {
             w.capabilities.forEach(cap => allCaps.add(cap));
@@ -282,10 +296,8 @@ function updateTaskDropdown(workers) {
         opt.value = cap;
         opt.textContent = capLabels[cap] || `${cap} (Capacidad externa)`;
         taskSelect.appendChild(opt);
-        // Guardar payload de ejemplo
         window._capPayloads[cap] = defaultPayloads[cap] || "{}";
     });
-    // Restaurar selección anterior si sigue disponible
     if (currentVal && [...allCaps].includes(currentVal)) taskSelect.value = currentVal;
 
     // Actualizar el payload input si ya tenemos uno pre-cargado
@@ -296,10 +308,9 @@ function updateTaskDropdown(workers) {
         }
     }
 
-    // También actualizar el select del chat del líder
+    // También actualizar el select del chat del líder (mismo conjunto completo)
     if (chatTaskSelect) {
         const chatCurrentVal = chatTaskSelect.value;
-        // Mantener la opción vacía inicial
         chatTaskSelect.innerHTML = '<option value="">-- Asignar tarea --</option>';
         allCaps.forEach(cap => {
             const opt = document.createElement("option");
