@@ -94,11 +94,12 @@ async function httpLatency(payload) {
  * Cuenta cuántas vocales tiene un string.
  */
 function countVowels(payload) {
-    const text = payload.text || "";
-    if (typeof text !== "string") {
-        throw new Error("Se requiere 'text' como string");
+    // Si el payload viene vacío ({}) o no trae el campo 'text'
+    if (!payload || !payload.text || typeof payload.text !== "string") {
+        throw new Error("❌ JSON inválido. Para usar count_vowels debes enviar esta estructura: {\"text\": \"tu texto aquí\"}");
     }
-    const count = (text.match(/[aeiouáéíóúAEIOUÁÉÍÓÚ]/g) || []).length;
+    
+    const count = (payload.text.match(/[aeiouáéíóúAEIOUÁÉÍÓÚ]/g) || []).length;
     return { vowels: count };
 }
 

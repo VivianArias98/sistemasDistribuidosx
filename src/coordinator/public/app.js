@@ -241,9 +241,9 @@ function updateTaskDropdown(workers) {
     const chatTaskSelect = document.getElementById("chat-leader-assign-task");
     if (!taskSelect) return;
 
-    // ── Lista BASE fija: TODAS las tareas del examen (sección 9) + comunes
-    // El coordinador siempre puede asignar cualquier tarea conocida.
-    // El balanceador ya se encarga de encontrar al worker correcto.
+    // ── Lista BASE fija: SOLO las 6 tareas base del examen (sección 9).
+    // Las capacidades extra de los workers (ej. count_vowels) aparecerán solo dinámicamente
+    // cuando el worker las presente.
     const ALL_KNOWN_TASKS = [
         "math_compute",      // 9.1 - Calculadora
         "http_fetch",        // 9.2 - Fetch HTTP
@@ -251,8 +251,6 @@ function updateTaskDropdown(workers) {
         "stats_compute",     // 9.4 - Estadísticas
         "vector_distance",   // 9.5 - Distancia vectorial
         "http_latency",      // 9.6 - Latencia HTTP
-        "random_number",     // Capacidad propia
-        "reverse_string",    // Capacidad extra
     ];
 
     // Recolectar capacidades extra de workers activos (desconocidas/nuevas)
@@ -263,7 +261,7 @@ function updateTaskDropdown(workers) {
         }
     });
 
-    // Etiquetas amigables para capacidades conocidas
+    // Etiquetas amigables SOLO para capacidades conocidas
     const capLabels = {
         "math_compute":    "math_compute (Calculadora)",
         "http_fetch":      "http_fetch (Llamada HTTP)",
@@ -271,9 +269,6 @@ function updateTaskDropdown(workers) {
         "stats_compute":   "stats_compute (Estadísticas)",
         "vector_distance": "vector_distance (Distancia Vectorial)",
         "http_latency":    "http_latency (Latencia HTTP)",
-        "random_number":   "random_number (Número Aleatorio)",
-        "reverse_string":  "reverse_string (Invertir Texto)",
-        "count_vowels":    "count_vowels (Contar Vocales)",
     };
 
     // Payload de ejemplo para auto-completar el input al seleccionar
@@ -285,9 +280,6 @@ function updateTaskDropdown(workers) {
         "stats_compute":   '{"numbers": [1, 2, 3, 4, 5]}',
         "vector_distance": '{"a": [0, 0], "b": [3, 4]}',
         "http_latency":    '{"url": "https://google.com"}',
-        "random_number":   '{"min": 1, "max": 100}',
-        "reverse_string":  '{"text": "Sistemas Distribuidos"}',
-        "count_vowels":    '{"text": "escribe un texto aqui"}',
     };
 
     // Reconstruir el select principal de tareas
