@@ -1279,10 +1279,12 @@ async function sendLeaderMessage() {
                 body: JSON.stringify({ type, payload, targetWorker: currentLeaderChatContact })
             });
             const data = await r.json();
+            
+            // Siempre reseteamos el select, sin importar si tuvo éxito o falló, para no bloquear el chat.
+            taskSelect.value = "";
+
             if (r.ok) {
                 showToast(`Tarea despachada a ${data.worker}`, "success");
-                // Resetear select
-                taskSelect.value = "";
                 // Simular el mensaje en el chat para que el líder vea que lo envió
                 await fetch("/api/send-message", {
                     method: "POST",
@@ -1291,7 +1293,13 @@ async function sendLeaderMessage() {
                 });
                 await loadMessages();
             } else {
-                showToast("Error al asignar tarea: " + (data.error || "Desconocido"), "error");
+                // El error lo inyectamos directamente en el chat
+                await fetch("/api/send-message", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ from: myId, to: currentLeaderChatContact, message: `[ERROR DEL SISTEMA] No se pudo asignar la tarea: ${data.error || "Desconocido"}` })
+                });
+                await loadMessages();
             }
         } else {
             // Es un mensaje de chat normal
