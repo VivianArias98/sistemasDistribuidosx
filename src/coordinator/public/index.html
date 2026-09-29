@@ -275,36 +275,38 @@
                             <form id="task-form" onsubmit="event.preventDefault(); assignTask();" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
                                 <div class="input-group" style="flex:1;">
                                     <label>Capacidad / Tarea</label>
+                                    <!-- Las opciones se cargan dinámicamente desde updateTaskDropdown() -->
                                     <select id="task-type" class="input" onchange="updatePayloadTemplate(this.value)">
-                                        <option value="math_compute">math_compute (Calculadora)</option>
-                                        <option value="http_fetch">http_fetch (Llamada HTTP)</option>
-                                        <option value="search_text">search_text (Buscar Texto)</option>
-                                        <option value="stats_compute">stats_compute (Estadísticas de Números)</option>
-                                        <option value="vector_distance">vector_distance (Distancia Vectorial)</option>
-                                        <option value="http_latency">http_latency (Latencia HTTP)</option>
-                                        <option value="reverse_string">reverse_string (Invertir Texto)</option>
+                                        <option value="">Cargando capacidades...</option>
                                     </select>
                                 </div>
                                 <div class="input-group" style="flex:2;">
                                     <label>Payload (JSON)</label>
-                                    <input type="text" id="task-payload" class="input" placeholder='Ej: {"operation": "add", "a": 5, "b": 10}' value='{"operation": "add", "a": 5, "b": 10}'>
+                                    <input type="text" id="task-payload" class="input"
+                                        placeholder='Selecciona una tarea para ver el payload de ejemplo'
+                                        oninput="this._userEdited = true"
+                                        onfocus="this._userEdited = true">
                                 </div>
                                 <button type="submit" class="btn btn-primary">Asignar Tarea 🚀</button>
                                 <script>
                                     function updatePayloadTemplate(val) {
-                                        const payloads = {
-                                            "math_compute": '{"operation": "add", "a": 5, "b": 10}',
-                                            "http_fetch": '{"url": "https://jsonplaceholder.typicode.com/todos/1"}',
-                                            "search_text": '{"text": "hola mundo hola", "query": "hola"}',
-                                            "stats_compute": '{"numbers": [1, 2, 3, 4, 5]}',
+                                        // Usar payloads dinámicos registrados en window._capPayloads
+                                        const payloads = Object.assign({
+                                            "math_compute":    '{"operation": "add", "a": 5, "b": 10}',
+                                            "http_fetch":      '{"url": "https://jsonplaceholder.typicode.com/todos/1"}',
+                                            "search_text":     '{"text": "hola mundo hola", "query": "hola"}',
+                                            "stats_compute":   '{"numbers": [1, 2, 3, 4, 5]}',
                                             "vector_distance": '{"a": [0, 0], "b": [3, 4]}',
-                                            "http_latency": '{"url": "https://google.com"}',
-                                            "reverse_string": '{"text": "Sistemas Distribuidos"}'
-                                        };
+                                            "http_latency":    '{"url": "https://google.com"}',
+                                            "random_number":   '{"min": 1, "max": 100}',
+                                            "reverse_string":  '{"text": "Sistemas Distribuidos"}'
+                                        }, window._capPayloads || {});
                                         const input = document.getElementById('task-payload');
-                                        if (payloads[val]) {
-                                            input.value = payloads[val];
-                                            input.placeholder = 'Ej: ' + payloads[val];
+                                        if (input) {
+                                            const example = payloads[val] || '{}';
+                                            input.value = example;
+                                            input.placeholder = 'Ej: ' + example;
+                                            input._userEdited = false; // Reset: el sistema llenó el campo
                                         }
                                     }
                                 </script>

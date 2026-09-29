@@ -13,6 +13,9 @@ const eventsModule = require("../election/events");
 
 const router = express.Router();
 
+// ─── Registro de tareas pendientes (taskId → {type, payload}) ───────────────────
+const pendingTasks = new Map();
+
 // ─── MIDDLEWARE DE LIDERAZGO (Fase 4: Que solo mande el líder) ────────────────
 const ensureLeader = (req, res, next) => {
     // 1. Si soy el líder, proceso la petición normal
@@ -682,6 +685,14 @@ router.post("/api/assign-task", ensureLeader, async (req, res) => {
 
     const taskId = `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     
+    // Guardar payload para mostrarlo en el resultado final
+    pendingTasks.set(taskId, { type, payload });
+    // Limpiar tareas viejas (más de 5 minutos)
+    const FIVE_MIN = 5 * 60 * 1000;
+    for (const [id, info] of pendingTasks) {
+        if (Date.now() - parseInt(id.split("-")[1] || 0) > FIVE_MIN) pendingTasks.delete(id);
+    }
+    
     try {
         const endpoint = selectedWorker.url.replace(/\/$/, "") + "/task/assign";
         await axios.post(endpoint, {
@@ -696,6 +707,7 @@ router.post("/api/assign-task", ensureLeader, async (req, res) => {
         logger.info("Workload", `Tarea ${taskId} asignada a ${selectedWorker.name}`);
         res.json({ ok: true, taskId, worker: selectedWorker.name });
     } catch (err) {
+        pendingTasks.delete(taskId);
         logger.error("Workload", `Error asignando tarea a ${selectedWorker.name}: ${err.message}`);
         res.status(500).json({ error: "Fallo al enviar tarea al worker" });
     }
@@ -714,13 +726,28 @@ router.post("/task/receive", (req, res) => {
         logger.error("Workload", `❌ Tarea fallida [${taskId}]: ${error}`);
     }
     
-    // Inyectar el resultado de la tarea directamente como un mensaje en el chat
-    // Extraemos el workerId de la query string para no ensuciar el JSON del examen
+    // Recuperar el payload original de la tarea para incluirlo en el resultado
+    const taskInfo = pendingTasks.get(taskId);
+    pendingTasks.delete(taskId);
+    
+    // Construir mensaje enriquecido con los datos de la operación y el resultado
     const sender = req.query.workerId || "Sistema";
     const receiver = engine.selfId || "Coordinador";
-    const msgText = status === "ok" 
-        ? `[RESULTADO TAREA] ${JSON.stringify(result)}` 
-        : `[ERROR TAREA] ${error}`;
+    
+    let msgText;
+    if (status === "ok") {
+        if (taskInfo) {
+            const { type: taskType, payload: taskPayload } = taskInfo;
+            const payloadStr = JSON.stringify(taskPayload);
+            const resultStr  = JSON.stringify(result);
+            msgText = `[RESULTADO TAREA] \u2705 Tipo: ${taskType} | Operación: ${payloadStr} | Resultado: ${resultStr}`;
+        } else {
+            msgText = `[RESULTADO TAREA] \u2705 ${JSON.stringify(result)}`;
+        }
+    } else {
+        const opStr = taskInfo ? ` | Operación: ${JSON.stringify(taskInfo.payload)}` : "";
+        msgText = `[ERROR TAREA] \u274c${opStr} | Error: ${error}`;
+    }
 
     const msgEntry = { 
         id: `msg-${Date.now()}-${Math.floor(Math.random()*1000)}`,

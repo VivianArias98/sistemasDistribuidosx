@@ -8,30 +8,60 @@
  *  4. Si el coordinador cae, activar huntForLeader() automáticamente.
  */
 require("dotenv").config();
-const app        = require("./app");
-const axios      = require("axios");
-const journal    = require("./services/journal.service");
-const pulse      = require("./services/pulse.service");
+const app = require("./app");
+const axios = require("axios");
+const journal = require("./services/journal.service");
+const pulse = require("./services/pulse.service");
 const msgService = require("./services/message.service");
-const tasks      = require("./services/tasks.service");
-const logger     = require("./utils/logger");
+const tasks = require("./services/tasks.service");
+const logger = require("./utils/logger");
 
 // ─── Configuración ────────────────────────────────────────────────────────────
-const PORT         = parseInt(process.env.WORKER_PORT  || "4001", 10);
-const WORKER_NAME  = process.env.WORKER_NAME            || "Worker1";
-const WORKER_URL   = process.env.WORKER_URL             || `http://localhost:${PORT}`;
+const PORT = parseInt(process.env.WORKER_PORT || "4001", 10);
+const WORKER_NAME = process.env.WORKER_NAME || "Worker1";
+const WORKER_URL = process.env.WORKER_URL || `http://localhost:${PORT}`;
 let COORDINATORS = (process.env.COORDINATORS || "http://localhost:3001")
     .split(",").map(u => u.trim()).filter(Boolean);
 
 // ─── Estado global del worker ─────────────────────────────────────────────────
-let status     = "iniciando";    // iniciando | registrado | buscando | apagado
-let parentUrl  = null;           // URL del coordinador actual (líder)
+let status = "iniciando";    // iniciando | registrado | buscando | apagado
+let parentUrl = null;           // URL del coordinador actual (líder)
 let parentName = "Coordinador";  // Nombre del líder
 
 // ─── Inbox local ──────────────────────────────────────────────────────────────
 const inbox = [];
 
 // ─── Hunting Loop ─────────────────────────────────────────────────────────────
+
+// Capacidades por defecto del worker: TODAS las definidas en el examen (sección 9)
+// Si el worker no puede ejecutar alguna, responde con task-result { status: "error" }
+const DEFAULT_CAPABILITIES = [
+    "math_compute",      // 9.1 - Calculadora básica
+    "http_fetch",        // 9.2 - Fetch HTTP
+    "search_text",       // 9.3 - Búsqueda en texto
+    "stats_compute",     // 9.4 - Estadísticas (mean, min, max)
+    "vector_distance",   // 9.5 - Distancia entre vectores
+    "http_latency",      // 9.6 - Latencia HTTP
+    "random_number"      // Capacidad propia del worker
+];
+
+/**
+ * Obtiene las capacidades del worker consultando su propio endpoint.
+ * Si el endpoint falla, usa las capacidades por defecto.
+ */
+async function getWorkerCapabilities() {
+    try {
+        const resp = await axios.get(`http://localhost:${PORT}/task/capabilities`, { timeout: 2000 });
+        if (resp.data && Array.isArray(resp.data.capabilities)) {
+            const caps = resp.data.capabilities;
+            logger.info(`📋 Capacidades obtenidas dinámicamente: [${caps.join(", ")}]`);
+            return caps;
+        }
+    } catch (e) {
+        logger.warn(`No se pudieron obtener capacidades dinámicas, usando por defecto: ${e.message}`);
+    }
+    return DEFAULT_CAPABILITIES;
+}
 
 /**
  * Busca al coordinador líder intentando un register/pulse simple.
@@ -42,25 +72,24 @@ async function huntForLeader() {
     journal.record("busqueda", { coordinadores: COORDINATORS });
     logger.hunt(`Iniciando hunting loop — ${COORDINATORS.length} coordinadores conocidos`);
 
+    // Obtener capacidades dinámicamente antes de registrarse
+    const capabilities = await getWorkerCapabilities();
+
     while (status === "buscando") {
         for (const url of COORDINATORS) {
             journal.record("pregunta", { coordinador: url });
             try {
-                // El trabajador intenta conectarse directamente.
+                // El trabajador intenta conectarse al coordinador con sus capacidades reales
                 const resp = await axios.post(`${url}/register`, {
                     type: "register",
                     data: {
                         id: WORKER_NAME,
                         url: WORKER_URL,
                         localPort: PORT,
-                        capabilities: [
-                            "vector_distance", 
-                            "http_latency", 
-                            "random_number"
-                        ]
+                        capabilities
                     }
                 }, { timeout: 3000 });
-                
+
                 const responseData = resp.data;
 
                 if (responseData.type === "redirect") {
@@ -69,14 +98,14 @@ async function huntForLeader() {
                     if (leaderUrl) {
                         COORDINATORS = [leaderUrl, ...COORDINATORS.filter(u => u !== leaderUrl)];
                     }
-                    break; 
+                    break;
                 }
-                
+
                 if (resp.status === 200 || resp.status === 201) {
                     logger.hunt(`✅ Líder encontrado y registrado: ${url}`);
-                    return { url, name: responseData.leaderId || "Coordinador" };
+                    return { url, name: responseData.leaderId || "Coordinador", capabilities };
                 }
-                
+
                 logger.hunt(`${url} respondió código ${resp.status}, continuando...`);
             } catch (err) {
                 if (err.response && err.response.data && err.response.data.type === "redirect") {
@@ -99,17 +128,19 @@ async function huntForLeader() {
 /**
  * Registra el parent actual localmente (ya fuimos registrados en el hunt).
  * @param {string} coordinatorUrl
+ * @param {string[]} [capabilities] - Lista de capacidades del worker
  */
-function registerWithCoordinator(coordinatorUrl) {
+function registerWithCoordinator(coordinatorUrl, capabilities = DEFAULT_CAPABILITIES) {
     parentUrl = coordinatorUrl;
-    status    = "registrado";
+    status = "registrado";
     msgService.setParent(coordinatorUrl, WORKER_NAME);
-    journal.record("registro", { coordinador: coordinatorUrl });
+    journal.record("registro", { coordinador: coordinatorUrl, capabilities });
     logger.reg(`Registrado y acoplado con coordinador: ${coordinatorUrl}`);
 
-    // Enviar mensaje automático de bienvenida informando las capacidades
+    // Enviar mensaje automático de bienvenida informando las capacidades dinámicas
     setTimeout(() => {
-        const welcomeMsg = `¡Hola Líder! Soy el worker ${WORKER_NAME} y acabo de conectarme. Estoy listo para procesar estas tareas: vector_distance, http_latency y random_number.`;
+        const capsStr = capabilities.join(", ");
+        const welcomeMsg = `¡Hola Líder! Soy ${WORKER_NAME} y me acabo de conectar. ✅ Mis capacidades disponibles son: [${capsStr}]`;
         msgService.send(welcomeMsg)
             .then(() => {
                 console.log(`📤 Mensaje de bienvenida automático enviado al coordinador.`);
@@ -140,12 +171,13 @@ async function mainLoop() {
             // 1. Buscar líder
             const leaderData = await huntForLeader();
             if (!leaderData || status === "apagado") break;
-            
+
             const leaderUrl = typeof leaderData === "string" ? leaderData : leaderData.url;
             parentName = typeof leaderData === "string" ? "Coordinador" : leaderData.name;
 
-            // 2. Registrarse
-            await registerWithCoordinator(leaderUrl);
+            // 2. Registrarse (pasando las capacidades obtenidas dinámicamente)
+            const leaderCaps = typeof leaderData === "object" ? (leaderData.capabilities || DEFAULT_CAPABILITIES) : DEFAULT_CAPABILITIES;
+            await registerWithCoordinator(leaderUrl, leaderCaps);
 
             // 3. Iniciar pulsos; si pierde el coordinador → volver a cazar
             await new Promise(resolve => {
@@ -180,12 +212,12 @@ async function mainLoop() {
 
 app.get("/status", (_req, res) => {
     res.json({
-        name:    WORKER_NAME,
-        url:     WORKER_URL,
+        name: WORKER_NAME,
+        url: WORKER_URL,
         status,
-        parent:  parentUrl,
+        parent: parentUrl,
         journal: journal.getAll(30),
-        inbox:   inbox.slice(0, 20),
+        inbox: inbox.slice(0, 20),
         coordinators: COORDINATORS,
     });
 });
@@ -290,7 +322,7 @@ app.get("/api/contacts", async (req, res) => {
 app.post("/send-to", async (req, res) => {
     const { to, message } = req.body;
     if (!to || !message) return res.status(400).json({ error: "Faltan datos" });
-    
+
     if (status === "registrado" && parentUrl) {
         try {
             // Enviar al coordinador para que lo enrute al destinatario correcto (worker o coordinador)
@@ -360,22 +392,16 @@ function startInteractiveChat() {
 }
 
 app.get("/task/capabilities", (req, res) => {
+    // Retorna dinámicamente todas las capacidades soportadas:
+    // integradas (examen) + las registradas en runtime
     res.json({
-        capabilities: [
-            "math_compute", 
-            "http_fetch", 
-            "search_text", 
-            "stats_compute", 
-            "vector_distance", 
-            "http_latency", 
-            "reverse_string"
-        ]
+        capabilities: tasks.getSupportedCapabilities()
     });
 });
 
 app.post("/task/assign", async (req, res) => {
     const reqBody = req.body || {};
-    
+
     // Log para monitorear el JSON de la comunicación general (Tarea entrante)
     console.log("📥 [JSON RECIBIDO - TAREA]:", JSON.stringify(reqBody, null, 2));
 
@@ -385,7 +411,7 @@ app.post("/task/assign", async (req, res) => {
 
     const { taskId, type: taskType, payload } = reqBody.data;
     if (!taskId || !taskType) return res.status(400).json({ error: "Falta taskId o type" });
-    
+
     // Responder inmediatamente para liberar al coordinador
     res.json({ ok: true, message: "Tarea encolada" });
 
@@ -393,7 +419,7 @@ app.post("/task/assign", async (req, res) => {
     journal.record("tarea_iniciada", { taskId, taskType });
 
     let resultMsg;
-    
+
     // Simular un LAG (retardo) configurable como solicitó el profesor
     const lagMs = parseInt(process.env.TASK_LAG_MS || "2000", 10);
     logger.info(`Simulando latencia de ${lagMs}ms para ejecutar la tarea...`);
@@ -437,7 +463,7 @@ app.post("/task/assign", async (req, res) => {
     }
 });
 
-app.post("/stop-pulse",  (_req, res) => { pulse.stop();  res.json({ ok: true, pulsing: false }); });
+app.post("/stop-pulse", (_req, res) => { pulse.stop(); res.json({ ok: true, pulsing: false }); });
 app.post("/start-pulse", (_req, res) => {
     if (parentUrl && status === "registrado") {
         pulse.start(parentUrl, WORKER_NAME, () => { status = "buscando"; mainLoop(); });
@@ -465,7 +491,7 @@ app.listen(PORT, () => {
     console.log(`🔗 Coordinadores conocidos: ${COORDINATORS.join(", ")}`);
     console.log(`📋 Panel   : http://localhost:${PORT}`);
     console.log("═".repeat(55));
-    
+
     // Iniciar chat interactivo (como en miniServer.js)
     setTimeout(() => startInteractiveChat(), 1000);
 

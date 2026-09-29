@@ -1,7 +1,71 @@
 const axios = require("axios");
 
+// ─── Implementaciones de capacidades del examen (Sección 9) ──────────────────
+
 /**
- * vector_distance: Obtiene la distancia entre dos vectores de dos dimensiones.
+ * 9.1 math_compute: Calculadora básica — operación y dos operandos.
+ */
+function mathCompute(payload) {
+    const { operation, a, b } = payload;
+    if (typeof a !== "number" || typeof b !== "number") {
+        throw new Error("Operandos 'a' y 'b' deben ser números");
+    }
+    switch (operation) {
+        case "add": return { result: a + b };
+        case "sub": return { result: a - b };
+        case "mul": return { result: a * b };
+        case "div":
+            if (b === 0) throw new Error("División por cero");
+            return { result: a / b };
+        default:
+            throw new Error(`Operación no soportada: ${operation}`);
+    }
+}
+
+/**
+ * 9.2 http_fetch: Hace fetch a la URL y retorna el estado y cuerpo.
+ */
+async function httpFetch(payload) {
+    const { url } = payload;
+    if (!url) throw new Error("Se requiere la propiedad 'url'");
+    try {
+        const resp = await axios.get(url, { timeout: 5000 });
+        return { status: resp.status, body: resp.data };
+    } catch (err) {
+        if (err.response) return { status: err.response.status, body: err.response.data };
+        throw err;
+    }
+}
+
+/**
+ * 9.3 search_text: Busca en texto cuántas veces aparece el query.
+ */
+function searchText(payload) {
+    const { text, query } = payload;
+    if (typeof text !== "string" || typeof query !== "string") {
+        throw new Error("Se requiere 'text' y 'query' como strings");
+    }
+    const count = (text.match(new RegExp(query, "g")) || []).length;
+    return { count };
+}
+
+/**
+ * 9.4 stats_compute: Promedio, mínimo y máximo de una lista de números.
+ */
+function statsCompute(payload) {
+    const { numbers } = payload;
+    if (!Array.isArray(numbers) || numbers.length === 0) {
+        throw new Error("Se requiere 'numbers' como arreglo con al menos un elemento");
+    }
+    const sum  = numbers.reduce((a, b) => a + b, 0);
+    const mean = sum / numbers.length;
+    const min  = Math.min(...numbers);
+    const max  = Math.max(...numbers);
+    return { mean, min, max };
+}
+
+/**
+ * 9.5 vector_distance: Distancia entre dos vectores de 2 dimensiones.
  */
 function vectorDistance(payload) {
     const { a, b } = payload;
@@ -13,43 +77,92 @@ function vectorDistance(payload) {
 }
 
 /**
- * http_latency: Obtiene la latencia de una URL determinada en ms.
+ * 9.6 http_latency: Latencia de una URL en milisegundos.
  */
 async function httpLatency(payload) {
     const { url } = payload;
     if (!url) throw new Error("Se requiere 'url'");
-    
     const start = Date.now();
     try {
         await axios.head(url, { timeout: 5000 });
-    } catch (e) {
-        // Ignoramos el error, solo queremos la latencia
-    }
-    const ms = Date.now() - start;
-    return { ms };
+    } catch (_) { /* Ignoramos el error, solo queremos la latencia */ }
+    return { ms: Date.now() - start };
 }
 
 /**
- * random_number: Genera un número aleatorio entre min y max (Inutilizado por defecto).
+ * random_number: Capacidad propia — número aleatorio entre min y max.
  */
 function randomNumber(payload) {
-    const min = payload.min || 0;
-    const max = payload.max || 100;
-    const result = Math.floor(Math.random() * (max - min + 1)) + min;
-    return { number: result };
+    const min = typeof payload.min === "number" ? payload.min : 0;
+    const max = typeof payload.max === "number" ? payload.max : 100;
+    return { number: Math.floor(Math.random() * (max - min + 1)) + min };
+}
+
+// ─── Registro dinámico de handlers ───────────────────────────────────────────
+//
+// Permite que capacidades DESCONOCIDAS se puedan registrar en tiempo de ejecución.
+// Si un worker externo tiene una capacidad nueva, se puede agregar su handler aquí
+// mediante registerHandler(name, fn) sin reiniciar el worker.
+//
+const dynamicHandlers = new Map();
+
+/**
+ * Registra un handler para una capacidad personalizada o desconocida.
+ * @param {string} name       - Nombre de la capacidad (ej. "image_resize")
+ * @param {Function} handler  - Función (payload) => result | Promise<result>
+ */
+function registerHandler(name, handler) {
+    if (typeof handler !== "function") throw new Error("El handler debe ser una función");
+    dynamicHandlers.set(name, handler);
+    console.log(`🔧 Handler dinámico registrado para capacidad: '${name}'`);
+}
+
+// ─── Mapa base de capacidades conocidas ──────────────────────────────────────
+const builtinHandlers = {
+    "math_compute":    mathCompute,
+    "http_fetch":      httpFetch,
+    "search_text":     searchText,
+    "stats_compute":   statsCompute,
+    "vector_distance": vectorDistance,
+    "http_latency":    httpLatency,
+    "random_number":   randomNumber,
+};
+
+/**
+ * Ejecuta una tarea según el tipo de capacidad requerida.
+ * Primero busca en los handlers registrados dinámicamente,
+ * luego en los handlers integrados (built-in).
+ *
+ * @param {string} taskType
+ * @param {object} payload
+ */
+async function executeTask(taskType, payload) {
+    // 1. Buscar en handlers dinámicos (capacidades de otros workers registradas en tiempo real)
+    if (dynamicHandlers.has(taskType)) {
+        return await Promise.resolve(dynamicHandlers.get(taskType)(payload));
+    }
+
+    // 2. Buscar en handlers integrados (capacidades del examen)
+    if (builtinHandlers[taskType]) {
+        return await Promise.resolve(builtinHandlers[taskType](payload));
+    }
+
+    // 3. Capacidad totalmente desconocida — error claro según el formato del examen
+    throw new Error(
+        `Capacidad '${taskType}' no implementada en este worker. ` +
+        `Capacidades disponibles: [${[...Object.keys(builtinHandlers), ...dynamicHandlers.keys()].join(", ")}]`
+    );
 }
 
 /**
- * Enrutador de tareas según el tipo de capacidad requerida.
+ * Retorna la lista completa de capacidades soportadas por este worker
+ * (integradas + dinámicas registradas en runtime).
  */
-async function executeTask(taskType, payload) {
-    switch (taskType) {
-        case "vector_distance": return vectorDistance(payload);
-        case "http_latency": return await httpLatency(payload);
-        case "random_number": return randomNumber(payload);
-        default:
-            throw new Error(`Capacidad '${taskType}' no soportada por este worker.`);
-    }
+function getSupportedCapabilities() {
+    return [
+        ...Object.keys(builtinHandlers),
+        ...dynamicHandlers.keys()
+    ];
 }
 
-module.exports = { executeTask };
+module.exports = { executeTask, registerHandler, getSupportedCapabilities };

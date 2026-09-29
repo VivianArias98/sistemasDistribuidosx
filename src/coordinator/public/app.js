@@ -228,7 +228,87 @@ async function loadWorkers() {
         renderWorkers(allWorkers);
         updateKpis();
         updateChatAvailableContacts();
+        updateTaskDropdown(allWorkers);  // Actualizar dropdown con capacidades reales
     } catch {}
+}
+
+/**
+ * Actualiza dinámicamente el dropdown de tareas con TODAS las capacidades
+ * declaradas por los workers activos (incluyendo capacidades desconocidas/nuevas).
+ */
+function updateTaskDropdown(workers) {
+    const taskSelect    = document.getElementById("task-type");
+    const chatTaskSelect = document.getElementById("chat-leader-assign-task");
+    if (!taskSelect) return;
+
+    // Recolectar todas las capacidades únicas de workers activos
+    const allCaps = new Set();
+    (workers || []).forEach(w => {
+        if (w.status === "ACTIVO" && Array.isArray(w.capabilities)) {
+            w.capabilities.forEach(cap => allCaps.add(cap));
+        }
+    });
+
+    // Etiquetas amigables para capacidades conocidas
+    const capLabels = {
+        "math_compute":    "math_compute (Calculadora)",
+        "http_fetch":      "http_fetch (Llamada HTTP)",
+        "search_text":     "search_text (Buscar Texto)",
+        "stats_compute":   "stats_compute (Estadísticas)",
+        "vector_distance": "vector_distance (Distancia Vectorial)",
+        "http_latency":    "http_latency (Latencia HTTP)",
+        "random_number":   "random_number (Número Aleatorio)",
+        "reverse_string":  "reverse_string (Invertir Texto)",
+    };
+
+    // Payload de ejemplo para auto-completar el input al seleccionar
+    window._capPayloads = window._capPayloads || {};
+    const defaultPayloads = {
+        "math_compute":    '{"operation": "add", "a": 5, "b": 10}',
+        "http_fetch":      '{"url": "https://jsonplaceholder.typicode.com/todos/1"}',
+        "search_text":     '{"text": "hola mundo hola", "query": "hola"}',
+        "stats_compute":   '{"numbers": [1, 2, 3, 4, 5]}',
+        "vector_distance": '{"a": [0, 0], "b": [3, 4]}',
+        "http_latency":    '{"url": "https://google.com"}',
+        "random_number":   '{"min": 1, "max": 100}',
+        "reverse_string":  '{"text": "Sistemas Distribuidos"}',
+    };
+
+    // Reconstruir el select principal de tareas
+    const currentVal = taskSelect.value;
+    taskSelect.innerHTML = "";
+    allCaps.forEach(cap => {
+        const opt = document.createElement("option");
+        opt.value = cap;
+        opt.textContent = capLabels[cap] || `${cap} (Capacidad externa)`;
+        taskSelect.appendChild(opt);
+        // Guardar payload de ejemplo
+        window._capPayloads[cap] = defaultPayloads[cap] || "{}";
+    });
+    // Restaurar selección anterior si sigue disponible
+    if (currentVal && [...allCaps].includes(currentVal)) taskSelect.value = currentVal;
+
+    // Actualizar el payload input si ya tenemos uno pre-cargado
+    const payloadInput = document.getElementById("task-payload");
+    if (payloadInput && window._capPayloads[taskSelect.value]) {
+        if (!payloadInput._userEdited) {
+            payloadInput.value = window._capPayloads[taskSelect.value];
+        }
+    }
+
+    // También actualizar el select del chat del líder
+    if (chatTaskSelect) {
+        const chatCurrentVal = chatTaskSelect.value;
+        // Mantener la opción vacía inicial
+        chatTaskSelect.innerHTML = '<option value="">-- Asignar tarea --</option>';
+        allCaps.forEach(cap => {
+            const opt = document.createElement("option");
+            opt.value = cap;
+            opt.textContent = capLabels[cap] || `${cap} (Capacidad externa)`;
+            chatTaskSelect.appendChild(opt);
+        });
+        if (chatCurrentVal && [...allCaps].includes(chatCurrentVal)) chatTaskSelect.value = chatCurrentVal;
+    }
 }
 
 async function updateChatAvailableContacts() {
@@ -604,7 +684,8 @@ async function assignTask() {
         
         if (res.ok) {
             feedback.style.color = "var(--green)";
-            feedback.innerText = `✅ Tarea ${data.taskId} asignada al worker '${data.worker}' con éxito.`;
+            feedback.innerHTML = `✅ Tarea <b>${data.taskId}</b> asignada al worker '<b>${data.worker}</b>'.<br>
+                <span style="opacity:0.8; font-size:0.88em;">📦 Operación enviada: <code>${type}</code> | Payload: <code>${payloadStr}</code></span>`;
             showToast(`Tarea despachada a ${data.worker}`, "success");
         } else {
             feedback.style.color = "var(--red)";
@@ -1285,11 +1366,12 @@ async function sendLeaderMessage() {
 
             if (r.ok) {
                 showToast(`Tarea despachada a ${data.worker}`, "success");
-                // Simular el mensaje en el chat para que el líder vea que lo envió
+                // Simular el mensaje en el chat para que el líder vea que lo envió (con el payload)
+                const payloadDisplay = JSON.stringify(payload);
                 await fetch("/api/send-message", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ from: myId, to: currentLeaderChatContact, message: `[SISTEMA] Te he asignado la tarea: ${type}` })
+                    body: JSON.stringify({ from: myId, to: currentLeaderChatContact, message: `[SISTEMA] ➡️ Tarea asignada: ${type} | Payload: ${payloadDisplay}` })
                 });
                 await loadMessages();
             } else {
