@@ -290,10 +290,22 @@ app.get("/api/contacts", async (req, res) => {
 app.post("/send-to", async (req, res) => {
     const { to, message } = req.body;
     if (!to || !message) return res.status(400).json({ error: "Faltan datos" });
-    // En el nuevo modelo, los workers solo pueden hablar con su coordinador directamente
+    
     if (status === "registrado" && parentUrl) {
         try {
-            await msgService.send(message);
+            // Enviar al coordinador para que lo enrute al destinatario correcto (worker o coordinador)
+            const resp = await axios.post(`${parentUrl}/api/send-message`, {
+                from: WORKER_NAME,
+                to: to,
+                message: message
+            }, { timeout: 5000, headers: { "ngrok-skip-browser-warning": "true" } });
+
+            // Si el coordinador responde error (destinatario no encontrado), propagarlo
+            if (resp.data && resp.data.error) {
+                return res.status(404).json({ error: resp.data.error });
+            }
+
+            // Guardar copia local del mensaje enviado para mostrar en miniUI
             inbox.unshift({
                 id: "sent_" + Date.now(),
                 from: WORKER_NAME,
@@ -304,7 +316,8 @@ app.post("/send-to", async (req, res) => {
             });
             res.json({ success: true });
         } catch (error) {
-            res.status(500).json({ error: error.message });
+            logger.error(`Error enviando mensaje a '${to}': ${error.message}`);
+            res.status(500).json({ error: `No se pudo entregar el mensaje: ${error.message}` });
         }
     } else {
         res.status(503).json({ error: "Worker no conectado a coordinador" });
