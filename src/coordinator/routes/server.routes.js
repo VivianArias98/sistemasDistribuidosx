@@ -707,20 +707,33 @@ router.post("/task/receive", (req, res) => {
         return res.status(400).json({ error: "Formato incorrecto, se espera { type: 'task-result', data: {...} }" });
     }
     
-    const { taskId, status, result, error } = body.data;
+    const { taskId, workerId, status, result, error } = body.data;
     if (status === "ok") {
         logger.info("Workload", `✅ Tarea completada [${taskId}]: ${JSON.stringify(result)}`);
     } else {
         logger.error("Workload", `❌ Tarea fallida [${taskId}]: ${error}`);
     }
     
-    // Aquí podríamos guardar el resultado en memoria o notificar a la UI (usando msgStore por ahora para que se vea)
-    msgStore.add({ 
-        from: "Sistema", 
-        to: "UI", 
-        message: `Resultado de tarea ${taskId}: ${status === "ok" ? JSON.stringify(result) : error}`, 
+    // Inyectar el resultado de la tarea directamente como un mensaje en el chat
+    const sender = workerId || "Sistema";
+    const receiver = engine.selfId || "Coordinador";
+    const msgText = status === "ok" 
+        ? `[RESULTADO TAREA] ${JSON.stringify(result)}` 
+        : `[ERROR TAREA] ${error}`;
+
+    const msgEntry = { 
+        id: `msg-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+        from: sender, 
+        to: receiver, 
+        message: msgText, 
+        timestamp: Date.now(),
         status: "ENTREGADO" 
-    });
+    };
+    
+    msgStore.add(msgEntry);
+    
+    // Emitir evento para que el frontend del chat se actualice en tiempo real
+    eventsModule.emit("message", { entry: msgEntry });
 
     res.json({ ok: true });
 });

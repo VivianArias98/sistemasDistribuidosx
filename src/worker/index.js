@@ -383,6 +383,7 @@ app.post("/task/assign", async (req, res) => {
             type: "task-result",
             data: {
                 taskId,
+                workerId: WORKER_NAME,
                 status: "ok",
                 result
             }
@@ -394,6 +395,7 @@ app.post("/task/assign", async (req, res) => {
             type: "task-result",
             data: {
                 taskId,
+                workerId: WORKER_NAME,
                 status: "error",
                 error: err.message
             }
