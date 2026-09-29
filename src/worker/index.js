@@ -270,8 +270,20 @@ app.post("/api/connect", async (req, res) => {
     }
 });
 
-app.get("/api/contacts", (req, res) => {
-    res.json({ leader: parentName !== "Coordinador" ? parentName : (parentUrl || "Desconectado"), workers: [] });
+app.get("/api/contacts", async (req, res) => {
+    if (!parentUrl) {
+        return res.json({ leader: "Desconectado", workers: [] });
+    }
+    try {
+        const response = await axios.get(`${parentUrl}/api/status`, { timeout: 3000 });
+        if (Array.isArray(response.data)) {
+            res.json({ leader: parentName !== "Coordinador" ? parentName : parentUrl, workers: response.data });
+        } else {
+            res.json({ leader: parentName !== "Coordinador" ? parentName : parentUrl, workers: [] });
+        }
+    } catch (error) {
+        res.json({ leader: parentName !== "Coordinador" ? parentName : parentUrl, workers: [] });
+    }
 });
 
 app.post("/send-to", async (req, res) => {
