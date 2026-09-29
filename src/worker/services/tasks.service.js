@@ -90,12 +90,16 @@ async function httpLatency(payload) {
 }
 
 /**
- * random_number: Capacidad propia — número aleatorio entre min y max.
+ * count_vowels: Tarea completamente nueva.
+ * Cuenta cuántas vocales tiene un string.
  */
-function randomNumber(payload) {
-    const min = typeof payload.min === "number" ? payload.min : 0;
-    const max = typeof payload.max === "number" ? payload.max : 100;
-    return { number: Math.floor(Math.random() * (max - min + 1)) + min };
+function countVowels(payload) {
+    const text = payload.text || "";
+    if (typeof text !== "string") {
+        throw new Error("Se requiere 'text' como string");
+    }
+    const count = (text.match(/[aeiouáéíóúAEIOUÁÉÍÓÚ]/g) || []).length;
+    return { vowels: count };
 }
 
 // ─── Registro dinámico de handlers ───────────────────────────────────────────
@@ -125,7 +129,7 @@ const builtinHandlers = {
     "stats_compute":   statsCompute,
     "vector_distance": vectorDistance,
     "http_latency":    httpLatency,
-    "random_number":   randomNumber,
+    "count_vowels":    countVowels,
 };
 
 /**

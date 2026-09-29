@@ -182,6 +182,7 @@ router.post("/api/request-presentation/:name", ensureLeader, async (req, res) =>
             { timeout: 4000, headers: { "ngrok-skip-browser-warning": "true" } }
         );
         const caps = capResp.data?.capabilities || worker.capabilities || [];
+        const schemas = capResp.data?.schemas || {};
 
         // Actualizar en el registro si cambiaron
         if (caps.length > 0) worker.capabilities = caps;
@@ -199,7 +200,7 @@ router.post("/api/request-presentation/:name", ensureLeader, async (req, res) =>
         eventsModule.emit("message", { entry: replyMsg });
 
         logger.info("Presentation", `Worker '${workerName}' capacidades: [${caps.join(", ")}]`);
-        return res.json({ ok: true, worker: workerName, capabilities: caps });
+        return res.json({ ok: true, worker: workerName, capabilities: caps, schemas });
 
     } catch (err) {
         // Fallback: usar capacidades registradas en el momento del register

@@ -273,6 +273,7 @@ function updateTaskDropdown(workers) {
         "http_latency":    "http_latency (Latencia HTTP)",
         "random_number":   "random_number (Número Aleatorio)",
         "reverse_string":  "reverse_string (Invertir Texto)",
+        "count_vowels":    "count_vowels (Contar Vocales)",
     };
 
     // Payload de ejemplo para auto-completar el input al seleccionar
@@ -286,6 +287,7 @@ function updateTaskDropdown(workers) {
         "http_latency":    '{"url": "https://google.com"}',
         "random_number":   '{"min": 1, "max": 100}',
         "reverse_string":  '{"text": "Sistemas Distribuidos"}',
+        "count_vowels":    '{"text": "escribe un texto aqui"}',
     };
 
     // Reconstruir el select principal de tareas
@@ -465,6 +467,17 @@ async function requestPresentation(workerName) {
         const data = await r.json();
         if (r.ok) {
             showToast(`✅ '${workerName}' tiene: [${(data.capabilities || []).join(", ")}]`, "success");
+            
+            // Integrar esquemas aprendidos dinámicamente del worker
+            if (data.schemas) {
+                window._capPayloads = window._capPayloads || {};
+                Object.keys(data.schemas).forEach(cap => {
+                    window._capPayloads[cap] = JSON.stringify(data.schemas[cap]);
+                });
+                // Refrescar el dropdown para que adquiera el nuevo payload por defecto
+                updateTaskDropdown();
+            }
+
             // Ir al chat del líder para ver la respuesta
             switchViewTab("incoming");
             await loadMessages();
