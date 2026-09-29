@@ -1325,9 +1325,15 @@ window.fillTaskMessageFromChat = function() {
     if (sel.value === "vector_distance") {
         input.value = '{"a":[0,0],"b":[3,4]}';
     } else if (sel.value === "math_compute") {
-        input.value = '{"operation":"add","args":[5, 10]}';
+        input.value = '{"operation":"add","a":10,"b":5}';
+    } else if (sel.value === "search_text") {
+        input.value = '{"text":"hola mundo hola","query":"hola"}';
+    } else if (sel.value === "stats_compute") {
+        input.value = '{"numbers":[1,2,3,4,5]}';
+    } else if (sel.value === "http_latency" || sel.value === "http_fetch") {
+        input.value = '{"url":"https://api.github.com"}';
     } else if (sel.value === "reverse_string") {
-        input.value = '{"str":"hola mundo"}';
+        input.value = '{"text":"hola mundo"}';
     } else if (sel.value !== "") {
         input.value = '{}';
     } else {
