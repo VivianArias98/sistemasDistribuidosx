@@ -707,7 +707,7 @@ router.post("/task/receive", (req, res) => {
         return res.status(400).json({ error: "Formato incorrecto, se espera { type: 'task-result', data: {...} }" });
     }
     
-    const { taskId, workerId, status, result, error } = body.data;
+    const { taskId, status, result, error } = body.data;
     if (status === "ok") {
         logger.info("Workload", `✅ Tarea completada [${taskId}]: ${JSON.stringify(result)}`);
     } else {
@@ -715,7 +715,8 @@ router.post("/task/receive", (req, res) => {
     }
     
     // Inyectar el resultado de la tarea directamente como un mensaje en el chat
-    const sender = workerId || "Sistema";
+    // Extraemos el workerId de la query string para no ensuciar el JSON del examen
+    const sender = req.query.workerId || "Sistema";
     const receiver = engine.selfId || "Coordinador";
     const msgText = status === "ok" 
         ? `[RESULTADO TAREA] ${JSON.stringify(result)}` 

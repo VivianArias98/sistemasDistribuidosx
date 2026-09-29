@@ -383,7 +383,6 @@ app.post("/task/assign", async (req, res) => {
             type: "task-result",
             data: {
                 taskId,
-                workerId: WORKER_NAME,
                 status: "ok",
                 result
             }
@@ -395,7 +394,6 @@ app.post("/task/assign", async (req, res) => {
             type: "task-result",
             data: {
                 taskId,
-                workerId: WORKER_NAME,
                 status: "error",
                 error: err.message
             }
@@ -409,7 +407,8 @@ app.post("/task/assign", async (req, res) => {
         try {
             // Log para monitorear el JSON saliente (Resultado)
             console.log("📤 [JSON ENVIADO - RESULTADO]:", JSON.stringify(resultMsg, null, 2));
-            await axios.post(`${parentUrl}/task/receive`, resultMsg, { timeout: 3000 });
+            // Pasamos el workerId por query parameter para NO alterar el JSON estricto del examen
+            await axios.post(`${parentUrl}/task/receive?workerId=${WORKER_NAME}`, resultMsg, { timeout: 3000 });
         } catch (e) {
             logger.error(`No se pudo enviar el resultado de ${taskId} al coordinador: ${e.message}`);
         }
