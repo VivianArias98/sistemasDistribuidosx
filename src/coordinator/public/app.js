@@ -576,6 +576,46 @@ async function connectToPeer(url) {
     }
 }
 
+// ─── Asignación de Tareas (Workload) ──────────────────────────────────────────
+async function assignTask() {
+    const type = document.getElementById("task-type").value;
+    const payloadStr = document.getElementById("task-payload").value;
+    const feedback = document.getElementById("task-feedback");
+    
+    let payload = {};
+    try {
+        payload = JSON.parse(payloadStr);
+    } catch (e) {
+        feedback.style.color = "var(--red)";
+        feedback.innerText = "❌ El payload debe ser un JSON válido.";
+        return;
+    }
+
+    feedback.style.color = "var(--text-2)";
+    feedback.innerText = "Enviando...";
+
+    try {
+        const res = await fetch("/api/assign-task", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type, payload })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+            feedback.style.color = "var(--green)";
+            feedback.innerText = `✅ Tarea ${data.taskId} asignada al worker '${data.worker}' con éxito.`;
+            showToast(`Tarea despachada a ${data.worker}`, "success");
+        } else {
+            feedback.style.color = "var(--red)";
+            feedback.innerText = `❌ Error: ${data.error}`;
+        }
+    } catch (err) {
+        feedback.style.color = "var(--red)";
+        feedback.innerText = `❌ Error de red: ${err.message}`;
+    }
+}
+
 // ─── Enviar Mensaje desde el Chat UI ────────────────────────
 async function sendChatMessage() {
     const targetSelect = document.getElementById("msg-to");

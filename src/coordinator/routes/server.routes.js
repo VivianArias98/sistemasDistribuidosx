@@ -23,27 +23,71 @@ const ensureLeader = (req, res, next) => {
     const peers = engine.knownPeers().map(p => p.url);
 
     if (engine.leaderUrl) {
-        // Si la petición es para registrar, devolver 200 con formato de redirección compatible con miniServer.js
-        if (req.path.includes("/register") || req.url.includes("/register")) {
-            return res.status(200).json({ 
-                redirect: true,
+        // Formato estricto requerido por el parcial
+        const responseData = {
+            type: "redirect",
+            data: {
+                leaderId: engine.leaderId || "desconocido",
                 leaderUrl: engine.leaderUrl,
-                peers 
-            });
+                priority: engine.priority || 0
+            }
+        };
+
+        if (req.path.includes("/register") || req.url.includes("/register")) {
+            return res.status(200).json(responseData);
         }
-        // Para otros endpoints (ej. si extendemos a otros), devolver 409
-        return res.status(409).json({ 
-            leader: engine.leaderUrl,
-            peers 
-        });
+        return res.status(409).json(responseData);
     } else {
-        // No hay líder aún (elección en curso) → 503 (Reintento)
+        // No hay líder aún
         return res.status(503).json({ 
-            retry: true, 
-            peers 
+            type: "error",
+            data: {
+                message: "No hay líder disponible actualmente en la red, elección en curso."
+            }
         });
     }
 };
+
+// ─── HANDSHAKE DE COORDINADORES (Hello / Welcome) ─────────────────────────────
+router.post("/hello", (req, res) => {
+    const { type, data } = req.body;
+    if (type !== "hello" || !data) return res.status(400).json({ error: "Debe ser tipo hello" });
+
+    const { id, url } = data;
+    if (!id || !url) return res.status(400).json({ error: "Se requiere id y url en data" });
+
+    // Añadir al peer a nuestra red
+    engine.allowPeer(url);
+    if (!engine.knownPeers().some(p => p.url === url)) {
+        engine.upsertPeer(id, url, {}, true);
+    }
+    logger.info("Handshake", `🤝 Hello recibido de Coordinador '${id}' (${url})`);
+
+    // Formatear listado de peers como lo pide el PDF
+    const knownPeers = engine.knownPeers().map(p => ({
+        id: p.id || "desconocido",
+        url: p.url
+    }));
+
+    // Formatear información del líder
+    let leaderInfo = null;
+    if (engine.leaderUrl) {
+        leaderInfo = {
+            id: engine.leaderId || "desconocido",
+            url: engine.leaderUrl,
+            priority: engine.priority || 0
+        };
+    }
+
+    res.json({
+        type: "welcome",
+        data: {
+            id: engine.selfId,
+            knownPeers,
+            leader: leaderInfo
+        }
+    });
+});
 
 // ─── NAMING SERVICE ───────────────────────────────────────────────────────────
 
@@ -65,16 +109,19 @@ router.post("/register", (req, res, next) => {
     }
     next();
 }, ensureLeader, (req, res) => {
-    let { name, url, platform, hostname, localPort } = req.body;
+    const payload = req.body.type === "register" && req.body.data ? req.body.data : req.body;
+    let { id, name, url, platform, hostname, localPort, capabilities } = payload;
+    
+    name = name || id;
 
-    if (!name?.trim()) return res.status(400).json({ error: "El campo 'name' es obligatorio" });
+    if (!name?.trim()) return res.status(400).json({ error: "El campo 'id' o 'name' es obligatorio" });
     if (!url?.trim())  return res.status(400).json({ error: "El campo 'url' es obligatorio" });
 
     name = name.trim();
     url  = url.trim();
 
     const ip = registry.clientIp(req);
-    const meta = { platform, hostname };
+    const meta = { platform, hostname, capabilities: capabilities || [] };
     
     if (localPort) {
         meta.localPort = localPort;
@@ -387,8 +434,12 @@ router.post("/unregister/:name", (req, res) => {
 // ─── HEARTBEAT / PULSE ────────────────────────────────────────────────────────
 
 router.post(["/heartbeat/:name", "/pulse/:name"], ensureLeader, (req, res) => {
-    const w = registry.pulse(req.params.name);
-    if (!w) return res.status(404).json({ error: `Worker '${req.params.name}' no registrado`, mustRegister: true });
+    const payload = req.body.type === "pulse" && req.body.data ? req.body.data : req.body;
+    const workerName = payload.id || req.params.name;
+    const load = payload.load || 0;
+
+    const w = registry.pulse(workerName, load); // Asumiendo que modificaremos registry.pulse para aceptar load
+    if (!w) return res.status(404).json({ error: `Worker '${workerName}' no registrado`, mustRegister: true });
     
     // Adjuntar la vista del clúster (Fase 4 y 5)
     res.json({ 
@@ -599,6 +650,68 @@ router.delete("/api/messages", (req, res) => {
     res.json({ success: true, message: "Historial de mensajes limpiado" });
 });
 
+// ─── WORKLOAD (TAREAS) ────────────────────────────────────────────────────────
+
+router.post("/api/assign-task", ensureLeader, async (req, res) => {
+    const { type, payload } = req.body;
+    if (!type) return res.status(400).json({ error: "Se requiere 'type'" });
+
+    // Encontrar workers activos que tengan esta capacidad
+    const activeWorkers = registry.list().filter(w => w.status === "ACTIVO" && w.capabilities && w.capabilities.includes(type));
+    
+    if (activeWorkers.length === 0) {
+        return res.status(404).json({ error: `No hay workers activos con la capacidad '${type}'` });
+    }
+
+    // Seleccionar el worker con menor carga (load)
+    activeWorkers.sort((a, b) => (a.load || 0) - (b.load || 0));
+    const selectedWorker = activeWorkers[0];
+
+    const taskId = `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    
+    try {
+        const endpoint = selectedWorker.url.replace(/\/$/, "") + "/task/assign";
+        await axios.post(endpoint, {
+            type: "task-assign",
+            data: {
+                taskId,
+                type,
+                payload
+            }
+        }, { timeout: 3000 });
+        
+        logger.info("Workload", `Tarea ${taskId} asignada a ${selectedWorker.name}`);
+        res.json({ ok: true, taskId, worker: selectedWorker.name });
+    } catch (err) {
+        logger.error("Workload", `Error asignando tarea a ${selectedWorker.name}: ${err.message}`);
+        res.status(500).json({ error: "Fallo al enviar tarea al worker" });
+    }
+});
+
+router.post("/task/receive", (req, res) => {
+    const body = req.body || {};
+    if (body.type !== "task-result" || !body.data) {
+        return res.status(400).json({ error: "Formato incorrecto, se espera { type: 'task-result', data: {...} }" });
+    }
+    
+    const { taskId, status, result, error } = body.data;
+    if (status === "ok") {
+        logger.info("Workload", `✅ Tarea completada [${taskId}]: ${JSON.stringify(result)}`);
+    } else {
+        logger.error("Workload", `❌ Tarea fallida [${taskId}]: ${error}`);
+    }
+    
+    // Aquí podríamos guardar el resultado en memoria o notificar a la UI (usando msgStore por ahora para que se vea)
+    msgStore.add({ 
+        from: "Sistema", 
+        to: "UI", 
+        message: `Resultado de tarea ${taskId}: ${status === "ok" ? JSON.stringify(result) : error}`, 
+        status: "ENTREGADO" 
+    });
+
+    res.json({ ok: true });
+});
+
 // ─── HOTRELOAD ────────────────────────────────────────────────────────────────
 
 router.post(["/hotreload/:name", "/servers/:name/url"], (req, res) => {
@@ -659,6 +772,8 @@ router.get("/api/status", (req, res) => {
             platform: w.platform, 
             hostname: w.hostname,
             localPort: w.localPort,
+            load: w.load || 0,
+            capabilities: w.capabilities || [],
             hasPulse: (now - w.lastHeartbeat) <= config.workerTimeoutMs,
             secondsWithoutPulse: Math.floor((now - w.lastHeartbeat) / 1000),
             lastHeartbeat: w.lastHeartbeat,

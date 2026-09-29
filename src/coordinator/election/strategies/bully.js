@@ -65,8 +65,16 @@ class BullyStrategy extends ElectionStrategy {
 
     // ─── MANEJAR MENSAJES ENTRANTES ──────────────────────────────────────────
 
-    async handleMessage({ from, type, payload }, res) {
+    async handleMessage(msg, res) {
         const e = this.engine;
+        
+        const isStrict = msg.type === "leader-announce" && msg.data;
+        let { from, type, payload } = msg;
+
+        if (isStrict) {
+            from = { id: msg.data.leaderId, url: msg.data.leaderUrl };
+            payload = msg.data;
+        }
 
         if (type === "ELECTION") {
             // Un nodo inferior nos pregunta si seguimos vivos
@@ -95,10 +103,10 @@ class BullyStrategy extends ElectionStrategy {
             e.role = "follower";
             res.json({ ok: true });
 
-        } else if (type === "COORDINATOR") {
-            // Si recibo un COORDINATOR de alguien menor que yo → no lo acepto, convoco elección (soy el matón)
+        } else if (type === "COORDINATOR" || type === "leader-announce") {
+            // Si recibo un leader-announce de alguien menor que yo (prioridad ID menor) -> convoco elección
             if (isHigher(e.selfId, from.id) && e.role !== "follower") {
-                logger.election(e.selfId, `COORDINATOR de ${from.id} rechazado (menor que yo) — no lo acepto, convoco elección (soy el matón)`);
+                logger.election(e.selfId, `leader-announce de ${from.id} rechazado (menor que yo) — no lo acepto, convoco elección`);
                 res.json({ ok: true });
                 setImmediate(() => this.startElection());
             } else {
@@ -108,6 +116,7 @@ class BullyStrategy extends ElectionStrategy {
                 e.leaderId  = from.id;
                 e.leaderUrl = from.url;
                 e.term = payload?.term ?? e.term;
+                e.priority = payload?.priority ?? parseInt(from.id.replace(/\D/g, "") || "0");
                 logger.leader(e.selfId, `Aceptan al nuevo líder: ${from.id} (${from.url})`);
                 events.emit("leader-accepted", { leader: from.id, leaderUrl: from.url, term: e.term });
                 res.json({ ok: true });
@@ -130,9 +139,12 @@ class BullyStrategy extends ElectionStrategy {
         const peers = e.knownPeers();
         peers.forEach(peer => {
             transport.post(`${peer.url}/election/message`, {
-                from: { id: e.selfId, url: e.selfUrl },
-                type: "COORDINATOR",
-                payload: { term: e.term }
+                type: "leader-announce",
+                data: {
+                    leaderId: e.selfId,
+                    leaderUrl: e.selfUrl,
+                    priority: parseInt(e.selfId.replace(/\D/g, "") || "0")
+                }
             }, { timeout: e.timing.rpcTimeout }).catch(() => {});
         });
     }
@@ -147,12 +159,15 @@ class BullyStrategy extends ElectionStrategy {
         logger.leader(e.selfId, `👑 Me proclamo líder (no respondió nadie de ID mayor) -> a todos — Término ${e.term}`);
         events.emit("election-won", { leader: e.selfId, leaderUrl: e.selfUrl, term: e.term });
 
-        // Broadcast COORDINATOR a todos los peers
+        // Broadcast leader-announce a todos los peers
         e.knownPeers().forEach(peer => {
             transport.post(`${peer.url}/election/message`, {
-                from: { id: e.selfId, url: e.selfUrl },
-                type: "COORDINATOR",
-                payload: { term: e.term }
+                type: "leader-announce",
+                data: {
+                    leaderId: e.selfId,
+                    leaderUrl: e.selfUrl,
+                    priority: parseInt(e.selfId.replace(/\D/g, "") || "0")
+                }
             }, { timeout: e.timing.rpcTimeout }).catch(() => {});
         });
     }

@@ -109,13 +109,29 @@ app.post("/api/setup", async (req, res) => {
         const transport = require("./election/transport");
         const { engine: eng } = require("./election/engine");
 
-        // 1. Handshake via gossip ping (compatible con formato Juan Diego: { from: {...} })
-        const snap = eng.snapshot();
-        const pingPayload = {
-            ...snap,
-            from: { id: snap.id, url: snap.url, role: snap.role, currentLeader: snap.leader, term: snap.term },
-        };
-        transport.post(`${cleanPeer}/election/ping`, pingPayload, { timeout: 3000 }).catch(() => {});
+        // 1. Handshake vía /hello (Requisito del Parcial)
+        transport.post(`${cleanPeer}/hello`, {
+            type: "hello",
+            data: {
+                id: nodeId,
+                url: cleanBase
+            }
+        }, { timeout: 3000 })
+        .then(res => {
+            if (res.data && res.data.type === "welcome" && res.data.data) {
+                const { knownPeers, leader } = res.data.data;
+                // Guardar los peers conocidos del nuevo amigo
+                if (Array.isArray(knownPeers)) {
+                    for (const p of knownPeers) {
+                        if (p.url && p.url !== cleanBase) {
+                            engine.allowPeer(p.url);
+                            engine.upsertPeer(p.id, p.url, {}, true);
+                        }
+                    }
+                }
+            }
+        })
+        .catch(() => {});
 
         // 2. Intentar registro como worker (best-effort; puede fallar si el peer no es el líder)
         transport.post(

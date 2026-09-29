@@ -328,14 +328,18 @@ async function _tick() {
             // - Nuestro formato: { id, url, role, leader, peers }
             // - Formato Juan Diego: { from: {id, url, role, currentLeader, term}, peers }
             const pingPayload = {
-                ...snap,
-                from: {
-                    id: snap.id,
-                    url: snap.url,
-                    role: snap.role,
-                    currentLeader: snap.leader,
-                    term: snap.term,
-                },
+                type: "ping",
+                data: {
+                    message: "ping de tin",
+                    ...snap,
+                    from: {
+                        id: snap.id,
+                        url: snap.url,
+                        role: snap.role,
+                        currentLeader: snap.leader,
+                        term: snap.term,
+                    },
+                }
             };
             const resp = await transport.post(
                 `${url}/election/ping`,
@@ -350,16 +354,24 @@ async function _tick() {
                 transport.post(
                     `${url}/register`,
                     {
-                        name: engine.selfId,
-                        url: engine.selfUrl,
-                        platform: process.platform,
-                        hostname: require("os").hostname(),
+                        type: "register",
+                        data: {
+                            id: engine.selfId,
+                            url: engine.selfUrl,
+                            capabilities: ["coordinator_sync"]
+                        }
                     },
                     { timeout: engine.timing.rpcTimeout }
                 ).then(() => {
                     return transport.post(
                         `${url}/pulse/${encodeURIComponent(engine.selfId)}`,
-                        {},
+                        {
+                            type: "pulse",
+                            data: {
+                                id: engine.selfId,
+                                load: 0
+                            }
+                        },
                         { timeout: engine.timing.rpcTimeout }
                     );
                 }).catch(() => { });

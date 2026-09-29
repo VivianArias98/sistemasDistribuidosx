@@ -77,6 +77,8 @@ function register(name, url, ip, meta = {}) {
         fallenAt:      null,
         messages:      [],
         localPort:     meta.localPort || null,
+        capabilities:  meta.capabilities || [],
+        load:          0,
     };
     workers.set(name, worker);
     logger.info("Registry", `Worker registrado: ${name} (${url}) — IP owner: ${ip}`);
@@ -87,7 +89,7 @@ function register(name, url, ip, meta = {}) {
  * Actualiza el heartbeat de un worker.
  * @returns {object} worker actualizado
  */
-function pulse(name) {
+function pulse(name, load = 0) {
     const w = workers.get(name);
     if (!w) return null;
     
@@ -100,6 +102,7 @@ function pulse(name) {
     w.lastHeartbeat = Date.now();
     w.status        = "ACTIVO";
     w.fallenAt      = null;
+    w.load          = load;
     if (wasFallen) logger.recovery("Registry", `Worker reanudó pulsos: ${name}`);
     return w;
 }

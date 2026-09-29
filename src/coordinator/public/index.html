@@ -258,6 +258,61 @@
                         </div>
                     </section>
 
+                    <!-- SECCIÓN DE WORKLOAD: Asignación de Tareas -->
+                    <section class="card connection-card incoming-card" id="section-workload" style="margin-top: 1rem;">
+                        <div class="card-header incoming-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                            <div>
+                                <div class="card-title">
+                                    <span class="card-icon">⚡</span>
+                                    <span>Asignación de Tareas (Workload)</span>
+                                </div>
+                                <div class="card-subtitle">
+                                    Envía tareas a la red. El líder se encargará de balancear la carga buscando un worker disponible con la capacidad adecuada.
+                                </div>
+                            </div>
+                        </div>
+                        <div style="padding: 1rem;">
+                            <form id="task-form" onsubmit="event.preventDefault(); assignTask();" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+                                <div class="input-group" style="flex:1;">
+                                    <label>Capacidad / Tarea</label>
+                                    <select id="task-type" class="input" onchange="updatePayloadTemplate(this.value)">
+                                        <option value="math_compute">math_compute (Calculadora)</option>
+                                        <option value="http_fetch">http_fetch (Llamada HTTP)</option>
+                                        <option value="search_text">search_text (Buscar Texto)</option>
+                                        <option value="stats_compute">stats_compute (Estadísticas de Números)</option>
+                                        <option value="vector_distance">vector_distance (Distancia Vectorial)</option>
+                                        <option value="http_latency">http_latency (Latencia HTTP)</option>
+                                        <option value="reverse_string">reverse_string (Invertir Texto)</option>
+                                    </select>
+                                </div>
+                                <div class="input-group" style="flex:2;">
+                                    <label>Payload (JSON)</label>
+                                    <input type="text" id="task-payload" class="input" placeholder='Ej: {"operation": "add", "a": 5, "b": 10}' value='{"operation": "add", "a": 5, "b": 10}'>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Asignar Tarea 🚀</button>
+                                <script>
+                                    function updatePayloadTemplate(val) {
+                                        const payloads = {
+                                            "math_compute": '{"operation": "add", "a": 5, "b": 10}',
+                                            "http_fetch": '{"url": "https://jsonplaceholder.typicode.com/todos/1"}',
+                                            "search_text": '{"text": "hola mundo hola", "query": "hola"}',
+                                            "stats_compute": '{"numbers": [1, 2, 3, 4, 5]}',
+                                            "vector_distance": '{"a": [0, 0], "b": [3, 4]}',
+                                            "http_latency": '{"url": "https://google.com"}',
+                                            "reverse_string": '{"text": "Sistemas Distribuidos"}'
+                                        };
+                                        const input = document.getElementById('task-payload');
+                                        if (payloads[val]) {
+                                            input.value = payloads[val];
+                                            input.placeholder = 'Ej: ' + payloads[val];
+                                        }
+                                    }
+                                </script>
+                            </form>
+                            <div id="task-feedback" style="margin-top: 1rem; color: var(--text-2); font-size: 0.9rem;"></div>
+                        </div>
+                    </section>
+
                     <!-- PASO 3: Bandeja de entrada y respuestas (Solo para el Líder) -->
                     <section class="card" id="chat-leader-inbox-screen" style="display:none; flex-direction:row; width:100%; height: 500px; margin-top: 1rem; overflow:hidden; border: 1px solid var(--border);">
                         

@@ -33,13 +33,11 @@ router.post("/election/ping", (req, res) => {
     if (faults.paused) return res.status(503).json({ error: "Nodo pausado" });
     if (engine.selfId === "UNCONFIGURED") return res.status(503).json({ error: "Nodo no configurado" });
 
-    const body = req.body || {};
+    const isStrictFormat = req.body && req.body.type === "ping" && req.body.data;
+    const body = isStrictFormat ? req.body.data : req.body || {};
     const logger = require("../utils/logger");
 
     // ── Compatibilidad con múltiples formatos de gossip (distintas implementaciones) ──
-    // Formato A (propio):      { id, url, peers }
-    // Formato B (Juan Diego):  { from: {id, url, role, currentLeader, term}, peers }
-    // Formato C (otros):       { nodeId, baseUrl, ... }
     const fromObj = body.from || {};
     const id  = body.id  || fromObj.id  || body.nodeId  || body.selfId  || body.name  || null;
     const url = body.url || fromObj.url || body.baseUrl || body.selfUrl || body.address || null;
@@ -101,14 +99,18 @@ router.post("/election/ping", (req, res) => {
         }
     }
 
-    // Respuesta compatible con ambos formatos (nuestro + Juan Diego):
+    // Respuesta compatible con ambos formatos (nuestro + Juan Diego + Parcial):
     const snap = engine.snapshot();
     res.json({
-        ...snap,
-        ok: true,
-        from: { id: snap.id, url: snap.url, role: snap.role, currentLeader: snap.leader },
-        currentLeader: snap.leader,
-        currentTerm: snap.term,
+        type: "pong",
+        data: {
+            message: "pong de tan",
+            ...snap,
+            ok: true,
+            from: { id: snap.id, url: snap.url, role: snap.role, currentLeader: snap.leader },
+            currentLeader: snap.leader,
+            currentTerm: snap.term,
+        }
     });
 });
 

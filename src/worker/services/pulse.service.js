@@ -33,19 +33,25 @@ function start(parentUrl, workerName, onLost) {
         try {
             await axios.post(
                 `${_parentUrl}/pulse/${_workerName}`,
-                {},
+                {
+                    type: "pulse",
+                    data: {
+                        id: _workerName,
+                        load: parseFloat((Math.random() * 0.5).toFixed(2)) // Simulación de carga
+                    }
+                },
                 { timeout: 3000 }
             );
             _failCount = 0;
             logger.pulse(`Pulso enviado → ${_parentUrl}`);
         } catch (err) {
-            // Camino Rápido (Fast Failover): si el nodo responde 409 con el nuevo líder, saltamos de una vez
-            if (err.response && err.response.status === 409) {
-                const data = err.response.data || {};
-                logger.warn(`Coordinador indica que NO es líder. Redirigiendo a: ${data.leader}`);
+            // Camino Rápido (Fast Failover): si el nodo responde con redirect
+            if (err.response && err.response.data && err.response.data.type === "redirect") {
+                const data = err.response.data.data || {};
+                logger.warn(`Coordinador indica que NO es líder. Redirigiendo a: ${data.leaderUrl}`);
                 clearInterval(_handle);
                 _handle = null;
-                if (_onLost) _onLost(data.leader, data.peers);
+                if (_onLost) _onLost(data.leaderUrl);
                 return;
             }
 

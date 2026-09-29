@@ -10,7 +10,7 @@ Si un [[Worker]] detecta que el líder actual (o el coordinador) ha dejado de re
 
 ## Protocolo Gossip (Chisme)
 En vez de saturar al coordinador central para enviar estado a todo el mundo, la información puede diseminarse usando **Gossip Protocol**.
-- Un nodo elige aleatoriamente a un subconjunto de pares (`peers`) y les manda el estado.
+- Un nodo elige aleatoriamente a un subconjunto de pares (`peers`) y les manda el estado.g
 - Esos nodos hacen lo mismo, propagando exponencialmente la información en la red.
 - **Ventaja**: Altamente tolerante a fallos y sin cuellos de botella centralizados.
 
