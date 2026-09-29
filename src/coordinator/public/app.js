@@ -1332,6 +1332,8 @@ window.fillTaskMessageFromChat = function() {
         input.value = '{"numbers":[1,2,3,4,5]}';
     } else if (sel.value === "http_latency" || sel.value === "http_fetch") {
         input.value = '{"url":"https://api.github.com"}';
+    } else if (sel.value === "random_number") {
+        input.value = '{"min": 1, "max": 100}';
     } else if (sel.value === "reverse_string") {
         input.value = '{"text":"hola mundo"}';
     } else if (sel.value !== "") {

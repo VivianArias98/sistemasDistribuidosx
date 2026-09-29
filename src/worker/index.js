@@ -54,13 +54,9 @@ async function huntForLeader() {
                         url: WORKER_URL,
                         localPort: PORT,
                         capabilities: [
-                            "math_compute", 
-                            "http_fetch", 
-                            "search_text", 
-                            "stats_compute", 
                             "vector_distance", 
                             "http_latency", 
-                            "reverse_string"
+                            "random_number"
                         ]
                     }
                 }, { timeout: 3000 });
@@ -113,7 +109,7 @@ function registerWithCoordinator(coordinatorUrl) {
 
     // Enviar mensaje automático de bienvenida informando las capacidades
     setTimeout(() => {
-        const welcomeMsg = `¡Hola Líder! Soy el worker ${WORKER_NAME} y acabo de conectarme. Estoy listo para procesar estas tareas: math_compute, http_fetch, search_text, stats_compute, vector_distance, http_latency y reverse_string.`;
+        const welcomeMsg = `¡Hola Líder! Soy el worker ${WORKER_NAME} y acabo de conectarme. Estoy listo para procesar estas tareas: vector_distance, http_latency y random_number.`;
         msgService.send(welcomeMsg)
             .then(() => {
                 console.log(`📤 Mensaje de bienvenida automático enviado al coordinador.`);
