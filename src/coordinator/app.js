@@ -134,6 +134,8 @@ app.post("/api/setup", async (req, res) => {
         .catch(() => {});
 
         // 2. Intentar registro como worker (best-effort; puede fallar si el peer no es el líder)
+        // [MODIFICADO] Se comenta el registro como worker para evitar que el Coordinador aparezca listado
+        /*
         transport.post(
             `${cleanPeer}/register`,
             {
@@ -144,6 +146,7 @@ app.post("/api/setup", async (req, res) => {
             },
             { timeout: 3000 }
         ).catch(() => {});
+        */
     }
 
     res.json({ ok: true, nodeId, baseUrl: cleanBase, peers: peerUrls });

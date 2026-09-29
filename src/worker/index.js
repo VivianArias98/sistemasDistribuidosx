@@ -35,12 +35,12 @@ const inbox = [];
 
 // Capacidades de ESTE worker (sección 9 del examen):
 //   - 2 capacidades asignadas: vector_distance (9.5) + http_latency (9.6)
-//   - 1 capacidad propia nueva: count_vowels
+//   - 1 capacidad propia nueva: generate_password
 // El coordinador las conoce desde el JSON del register; no se anuncian por chat.
 const DEFAULT_CAPABILITIES = [
     "vector_distance",   // 9.5 - Distancia entre vectores
     "http_latency",      // 9.6 - Latencia HTTP
-    "count_vowels"       // Capacidad completamente nueva
+    "generate_password"  // Capacidad completamente nueva
 ];
 
 /**
@@ -378,7 +378,7 @@ app.get("/task/capabilities", (req, res) => {
     res.json({
         capabilities: DEFAULT_CAPABILITIES,
         schemas: {
-            "count_vowels": { "text": "texto dinámico del worker" }
+            "generate_password": { "length": 12 }
         }
     });
 });
