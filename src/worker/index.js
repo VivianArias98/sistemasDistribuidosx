@@ -198,11 +198,63 @@ app.post("/send-message", async (req, res) => {
 app.post("/receive-message", (req, res) => {
     const { from, message, timestamp } = req.body;
     if (!message) return res.status(400).json({ error: "Se requiere 'message'" });
-    inbox.unshift({ from: from || "desconocido", message, timestamp: timestamp || Date.now() });
+    const entry = {
+        id: "recv_" + Date.now(),
+        from: from || "desconocido",
+        to: WORKER_NAME,
+        message: message,
+        timestamp: timestamp || Date.now(),
+        receivedAt: new Date().toLocaleTimeString()
+    };
+    inbox.unshift(entry);
     if (inbox.length > 50) inbox.pop();
     logger.msg(`Mensaje de '${from}': "${message}"`);
     res.json({ ok: true, received: true });
 });
+
+app.get("/messages", (req, res) => {
+    res.json(inbox);
+});
+
+app.get("/", (req, res) => {
+    const path = require("path");
+    res.sendFile(path.join(__dirname, "../../../miniUI.html"));
+});
+
+function startInteractiveChat() {
+    const readline = require("readline");
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        prompt: `💬 Escribe al líder (Enter para enviar) > `
+    });
+    console.log("\\n💬 ¡Modo chat activado! Escribe un mensaje y presiona Enter para enviarlo al coordinador.");
+    rl.prompt();
+    rl.on("line", async (line) => {
+        const msg = line.trim();
+        if (msg) {
+            try {
+                if (status === "registrado" && parentUrl) {
+                    await msgService.send(msg);
+                    console.log(`📤 Enviado al coordinador: "${msg}"`);
+                    inbox.unshift({
+                        id: "sent_" + Date.now(),
+                        from: WORKER_NAME,
+                        to: "Coordinador",
+                        message: msg,
+                        timestamp: Date.now(),
+                        receivedAt: new Date().toLocaleTimeString()
+                    });
+                } else {
+                    console.log(`❌ No estás conectado a ningún coordinador.`);
+                }
+            } catch (error) {
+                console.log(`❌ Error al enviar mensaje: ${error.message}`);
+            }
+        }
+        rl.prompt();
+    });
+}
 
 app.get("/task/capabilities", (req, res) => {
     res.json({
@@ -220,6 +272,10 @@ app.get("/task/capabilities", (req, res) => {
 
 app.post("/task/assign", async (req, res) => {
     const reqBody = req.body || {};
+    
+    // Log para monitorear el JSON de la comunicación general (Tarea entrante)
+    console.log("📥 [JSON RECIBIDO - TAREA]:", JSON.stringify(reqBody, null, 2));
+
     if (reqBody.type !== "task-assign" || !reqBody.data) {
         return res.status(400).json({ error: "Debe ser de tipo task-assign" });
     }
@@ -268,6 +324,8 @@ app.post("/task/assign", async (req, res) => {
     // Enviar el resultado al coordinador actual
     if (parentUrl) {
         try {
+            // Log para monitorear el JSON saliente (Resultado)
+            console.log("📤 [JSON ENVIADO - RESULTADO]:", JSON.stringify(resultMsg, null, 2));
             await axios.post(`${parentUrl}/task/receive`, resultMsg, { timeout: 3000 });
         } catch (e) {
             logger.error(`No se pudo enviar el resultado de ${taskId} al coordinador: ${e.message}`);
@@ -303,6 +361,9 @@ app.listen(PORT, () => {
     console.log(`🔗 Coordinadores conocidos: ${COORDINATORS.join(", ")}`);
     console.log(`📋 Panel   : http://localhost:${PORT}`);
     console.log("═".repeat(55));
+    
+    // Iniciar chat interactivo (como en miniServer.js)
+    setTimeout(() => startInteractiveChat(), 1000);
 
     mainLoop().catch(err => {
         logger.error(`mainLoop fatal: ${err.message}`);
