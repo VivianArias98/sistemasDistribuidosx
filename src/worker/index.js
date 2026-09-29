@@ -51,6 +51,7 @@ async function huntForLeader() {
                     data: {
                         id: WORKER_NAME,
                         url: WORKER_URL,
+                        localPort: PORT,
                         capabilities: [
                             "math_compute", 
                             "http_fetch", 
@@ -108,6 +109,27 @@ function registerWithCoordinator(coordinatorUrl) {
     msgService.setParent(coordinatorUrl, WORKER_NAME);
     journal.record("registro", { coordinador: coordinatorUrl });
     logger.reg(`Registrado y acoplado con coordinador: ${coordinatorUrl}`);
+
+    // Enviar mensaje automático de bienvenida informando las capacidades
+    setTimeout(() => {
+        const welcomeMsg = `¡Hola Líder! Soy el worker ${WORKER_NAME} y acabo de conectarme. Estoy listo para procesar estas tareas: math_compute, http_fetch, search_text, stats_compute, vector_distance, http_latency y reverse_string.`;
+        msgService.send(welcomeMsg)
+            .then(() => {
+                console.log(`📤 Mensaje de bienvenida automático enviado al coordinador.`);
+                // Agregar al inbox local para que también aparezca en la UI del worker
+                const entry = {
+                    id: "sent_" + Date.now(),
+                    from: WORKER_NAME,
+                    to: "Coordinador",
+                    message: welcomeMsg,
+                    timestamp: Date.now(),
+                    receivedAt: new Date().toLocaleTimeString()
+                };
+                inbox.unshift(entry);
+                if (inbox.length > 50) inbox.pop();
+            })
+            .catch(e => console.log(`❌ Error al enviar mensaje automático: ${e.message}`));
+    }, 1500);
 }
 
 /**
@@ -218,7 +240,62 @@ app.get("/messages", (req, res) => {
 
 app.get("/", (req, res) => {
     const path = require("path");
-    res.sendFile(path.join(__dirname, "../../../miniUI.html"));
+    res.sendFile(path.join(__dirname, "../../miniUI.html"));
+});
+
+app.get("/status", (req, res) => {
+    res.json({
+        name: WORKER_NAME,
+        port: PORT,
+        myUrl: WORKER_URL,
+        middlewareUrl: parentUrl || "",
+        platform: require("os").platform(),
+        hostname: require("os").hostname(),
+        isPulseActive: status === "registrado",
+        messagesCount: inbox.length,
+        uptime: Math.floor(process.uptime()),
+        isConnected: status === "registrado"
+    });
+});
+
+app.post("/api/connect", async (req, res) => {
+    const { middlewareUrl } = req.body;
+    if (!middlewareUrl) return res.status(400).json({ error: "Falta middlewareUrl" });
+    try {
+        await registerWithCoordinator(middlewareUrl);
+        pulse.start(middlewareUrl, WORKER_NAME, () => { status = "buscando"; mainLoop(); });
+        res.json({ success: true, middlewareUrl });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get("/api/contacts", (req, res) => {
+    res.json({ leader: parentUrl || "Desconectado", workers: [] });
+});
+
+app.post("/send-to", async (req, res) => {
+    const { to, message } = req.body;
+    if (!to || !message) return res.status(400).json({ error: "Faltan datos" });
+    // En el nuevo modelo, los workers solo pueden hablar con su coordinador directamente
+    if (status === "registrado" && parentUrl) {
+        try {
+            await msgService.send(message);
+            inbox.unshift({
+                id: "sent_" + Date.now(),
+                from: WORKER_NAME,
+                to: to,
+                message: message,
+                timestamp: Date.now(),
+                receivedAt: new Date().toLocaleTimeString()
+            });
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    } else {
+        res.status(503).json({ error: "Worker no conectado a coordinador" });
+    }
 });
 
 function startInteractiveChat() {
