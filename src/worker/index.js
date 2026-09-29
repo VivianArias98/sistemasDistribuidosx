@@ -33,16 +33,14 @@ const inbox = [];
 
 // ─── Hunting Loop ─────────────────────────────────────────────────────────────
 
-// Capacidades por defecto del worker: TODAS las definidas en el examen (sección 9)
-// Si el worker no puede ejecutar alguna, responde con task-result { status: "error" }
+// Capacidades de ESTE worker (sección 9 del examen):
+//   - 2 capacidades asignadas: vector_distance (9.5) + http_latency (9.6)
+//   - 1 capacidad propia nueva: random_number
+// El coordinador las conoce desde el JSON del register; no se anuncian por chat.
 const DEFAULT_CAPABILITIES = [
-    "math_compute",      // 9.1 - Calculadora básica
-    "http_fetch",        // 9.2 - Fetch HTTP
-    "search_text",       // 9.3 - Búsqueda en texto
-    "stats_compute",     // 9.4 - Estadísticas (mean, min, max)
     "vector_distance",   // 9.5 - Distancia entre vectores
     "http_latency",      // 9.6 - Latencia HTTP
-    "random_number"      // Capacidad propia del worker
+    "random_number"      // Capacidad propia
 ];
 
 /**
@@ -127,6 +125,7 @@ async function huntForLeader() {
 
 /**
  * Registra el parent actual localmente (ya fuimos registrados en el hunt).
+ * El coordinador ya conoce las capacidades desde el payload del register.
  * @param {string} coordinatorUrl
  * @param {string[]} [capabilities] - Lista de capacidades del worker
  */
@@ -136,28 +135,9 @@ function registerWithCoordinator(coordinatorUrl, capabilities = DEFAULT_CAPABILI
     msgService.setParent(coordinatorUrl, WORKER_NAME);
     journal.record("registro", { coordinador: coordinatorUrl, capabilities });
     logger.reg(`Registrado y acoplado con coordinador: ${coordinatorUrl}`);
-
-    // Enviar mensaje automático de bienvenida informando las capacidades dinámicas
-    setTimeout(() => {
-        const capsStr = capabilities.join(", ");
-        const welcomeMsg = `¡Hola Líder! Soy ${WORKER_NAME} y me acabo de conectar. ✅ Mis capacidades disponibles son: [${capsStr}]`;
-        msgService.send(welcomeMsg)
-            .then(() => {
-                console.log(`📤 Mensaje de bienvenida automático enviado al coordinador.`);
-                // Agregar al inbox local para que también aparezca en la UI del worker
-                const entry = {
-                    id: "sent_" + Date.now(),
-                    from: WORKER_NAME,
-                    to: "Coordinador",
-                    message: welcomeMsg,
-                    timestamp: Date.now(),
-                    receivedAt: new Date().toLocaleTimeString()
-                };
-                inbox.unshift(entry);
-                if (inbox.length > 50) inbox.pop();
-            })
-            .catch(e => console.log(`❌ Error al enviar mensaje automático: ${e.message}`));
-    }, 1500);
+    logger.reg(`Capacidades declaradas: [${capabilities.join(", ")}]`);
+    // NO se envía mensaje automático: el coordinador ya conoce las capacidades
+    // desde el JSON { type: "register", data: { id, url, capabilities } }
 }
 
 /**

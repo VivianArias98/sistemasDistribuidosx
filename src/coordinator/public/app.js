@@ -413,6 +413,7 @@ function renderWorkers(workers) {
                     <div class="btn-group-row">
                         <button class="btn btn-danger btn-sm" onclick="simulateFall('${escHtml(w.name)}')">⬇ Caída</button>
                         <button class="btn btn-ghost btn-sm" onclick="disconnectWorker('${escHtml(w.name)}')" title="Desconectar este worker">🔌 Desconectar</button>
+                        ${!isPeer ? `<button class="btn btn-primary btn-sm" onclick="requestPresentation('${escHtml(w.name)}')" title="Pedir al worker que se presente con sus capacidades">📋 Presentación</button>` : ""}
                     </div>
                 </td>
             </tr>
@@ -424,6 +425,26 @@ function renderWorkers(workers) {
             workersHtml += rowHtml;
         }
     });
+
+// ─── Pedir Presentación a un Worker ──────────────────────────────────────────────
+async function requestPresentation(workerName) {
+    showToast(`🎤 Solicitando presentación de '${workerName}'...`, "info");
+    try {
+        const r = await fetch(`/api/request-presentation/${encodeURIComponent(workerName)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        });
+        const data = await r.json();
+        if (r.ok) {
+            showToast(`✅ '${workerName}' se presentó: [${(data.capabilities || []).join(", ")}]`, "success");
+            await loadMessages();
+        } else {
+            showToast(`❌ Error: ${data.error || "No se pudo obtener presentación"}`, "error");
+        }
+    } catch (err) {
+        showToast(`❌ Error de red: ${err.message}`, "error");
+    }
+}
 
     if (peersHtml === "") {
         peersHtml = '<tr><td colspan="6" class="empty-cell">Sin peers entrantes registrados aún...</td></tr>';

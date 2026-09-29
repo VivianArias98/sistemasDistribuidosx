@@ -152,6 +152,75 @@ router.post("/register", (req, res, next) => {
 });
 
 /**
+ * POST /api/request-presentation/:name
+ * El coordinador le pide al worker que se presente con sus capacidades.
+ * Consulta GET /task/capabilities del worker y lo inyecta en el chat.
+ */
+router.post("/api/request-presentation/:name", ensureLeader, async (req, res) => {
+    const workerName = req.params.name;
+    const worker = registry.resolve(workerName);
+
+    if (!worker) return res.status(404).json({ error: `Worker '${workerName}' no encontrado` });
+    if (worker.status !== "ACTIVO") return res.status(409).json({ error: `Worker '${workerName}' no está activo` });
+
+    // 1. Inyectar pregunta del coordinador en el chat
+    const askMsg = {
+        id: `msg-${Date.now()}-ask`,
+        from: engine.selfId || "Coordinador",
+        to: workerName,
+        message: `[🎤 COORDINADOR] ¿Cuáles son tus capacidades? Preséntate.`,
+        timestamp: Date.now(),
+        status: "ENTREGADO"
+    };
+    msgStore.add(askMsg);
+    eventsModule.emit("message", { entry: askMsg });
+
+    try {
+        // 2. Preguntar las capacidades reales al endpoint del worker
+        const capResp = await axios.get(
+            `${worker.url.replace(/\/$/, "")}/task/capabilities`,
+            { timeout: 4000, headers: { "ngrok-skip-browser-warning": "true" } }
+        );
+        const caps = capResp.data?.capabilities || worker.capabilities || [];
+
+        // Actualizar en el registro si cambiaron
+        if (caps.length > 0) worker.capabilities = caps;
+
+        // 3. Inyectar respuesta del worker en el chat
+        const replyMsg = {
+            id: `msg-${Date.now()}-caps`,
+            from: workerName,
+            to: engine.selfId || "Coordinador",
+            message: `[👋 PRESENTACIÓN] Soy ${workerName}. Mis capacidades son: [${caps.join(", ")}]`,
+            timestamp: Date.now(),
+            status: "ENTREGADO"
+        };
+        msgStore.add(replyMsg);
+        eventsModule.emit("message", { entry: replyMsg });
+
+        logger.info("Presentation", `Worker '${workerName}' capacidades: [${caps.join(", ")}]`);
+        return res.json({ ok: true, worker: workerName, capabilities: caps });
+
+    } catch (err) {
+        // Fallback: usar capacidades registradas en el momento del register
+        const caps = worker.capabilities || [];
+        const fallbackMsg = {
+            id: `msg-${Date.now()}-fb`,
+            from: workerName,
+            to: engine.selfId || "Coordinador",
+            message: caps.length > 0
+                ? `[👋 PRESENTACIÓN] Soy ${workerName}. Capacidades registradas: [${caps.join(", ")}]`
+                : `[⚠️ PRESENTACIÓN] Soy ${workerName}. No pude responder en este momento.`,
+            timestamp: Date.now(),
+            status: "ENTREGADO"
+        };
+        msgStore.add(fallbackMsg);
+        eventsModule.emit("message", { entry: fallbackMsg });
+        return res.json({ ok: true, worker: workerName, capabilities: caps, fallback: true });
+    }
+});
+
+/**
  * Resuelve un nombre o URL de forma distribuida, consultando a los vecinos si no está local
  */
 async function resolveWithNeighbors(targetName, visited = []) {
