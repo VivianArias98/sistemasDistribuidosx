@@ -44,6 +44,34 @@ function start(parentUrl, workerName, onLost) {
             );
             _failCount = 0;
             logger.pulse(`Pulso enviado → ${_parentUrl}`);
+
+            // [COMPATIBILIDAD] Polling de mensajes para SistemasDistribuidos-main
+            try {
+                const pollResp = await axios.get(`${_parentUrl}/send-message/${_workerName}`, { timeout: 2000 });
+                if (pollResp.data && Array.isArray(pollResp.data.messages)) {
+                    // Solo evitamos imprimir repetidos guardando los IDs recientes
+                    if (!global._seenMessages) global._seenMessages = new Set();
+                    pollResp.data.messages.forEach(msg => {
+                        const msgId = msg.id || (msg.timestamp + msg.message);
+                        if (!global._seenMessages.has(msgId)) {
+                            global._seenMessages.add(msgId);
+                            const from = msg.sender || "Coordinador";
+                            console.log(`\n📥 [MENSAJE RECIBIDO] de ${from}: "${msg.message}"`);
+                            if (global._onMessageReceived) {
+                                global._onMessageReceived(msg);
+                            }
+                            
+                            // Guardar 100 max en el Set para no llenar memoria
+                            if (global._seenMessages.size > 100) {
+                                const iter = global._seenMessages.values();
+                                global._seenMessages.delete(iter.next().value);
+                            }
+                        }
+                    });
+                }
+            } catch (pollErr) {
+                // Ignorar 404 (el coordinador es sistemasDistribuidosx y usa PUSH, o la ruta no existe)
+            }
         } catch (err) {
             // Camino Rápido (Fast Failover): si el nodo responde con redirect
             if (err.response && err.response.data && err.response.data.type === "redirect") {

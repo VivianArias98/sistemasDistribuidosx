@@ -26,8 +26,8 @@ async function send(message, retries = 2) {
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
             const resp = await axios.post(
-                `${currentUrl}/send-message/${_workerName}`,
-                { message },
+                `${currentUrl}/messages`,
+                { sender: _workerName, message, target: "Coordinador" },
                 { timeout: 4000, maxRedirects: 0, validateStatus: s => s < 500 }
             );
 

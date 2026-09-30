@@ -376,9 +376,13 @@ function renderWorkers(workers) {
         let displayUrl = w.url;
         let isPeer = false;
         
-        // Si no tiene localPort Y no tiene capabilities, es un peer disfrazado de worker
-        // Un worker real puede conectarse sin localPort (ej: via ngrok) pero declara capabilities
-        if (!w.localPort && (!w.capabilities || w.capabilities.length === 0)) {
+        // Detectar si es un peer coordinador por su rol o nombre
+        // (NO por ausencia de capabilities — workers externos pueden no tener capacidades aún)
+        if (role === "leader" || role === "follower" || role === "candidate") {
+            isPeer = true;
+        } else if (w.name && (w.name.startsWith("coordinator-") || w.name.startsWith("coord-"))) {
+            isPeer = true;
+        } else if (w.platform === "Gossip") {
             isPeer = true;
         }
 

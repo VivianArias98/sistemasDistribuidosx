@@ -111,7 +111,7 @@ router.post("/register", (req, res, next) => {
         } catch (e) {}
     }
     next();
-}, ensureLeader, (req, res) => {
+}, ensureLeader, async (req, res) => {
     const payload = req.body.type === "register" && req.body.data ? req.body.data : req.body;
     let { id, name, url, platform, hostname, localPort, capabilities } = payload;
     
@@ -130,7 +130,13 @@ router.post("/register", (req, res, next) => {
         meta.localPort = localPort;
     }
 
-    // ── Bloquear auto-registro: un nodo no puede registrarse con el mismo ID que este servidor
+    // ── Advertencia: Si el worker se registra con localhost, no podrá recibir tareas remotas
+    const isLocalhostUrl = url.includes("localhost") || url.includes("127.0.0.1");
+    if (isLocalhostUrl) {
+        logger.info("Registry", `⚠️  Worker '${name}' se registró con URL local (${url}). Para tareas remotas necesita pasar su URL pública de Ngrok como primer argumento.`);
+    }
+
+    // ── Bloquear auto-registro
     if (engine.selfId && engine.selfId !== "UNCONFIGURED" && name === engine.selfId) {
         logger.info("Registry", `Registro rechazado: ID '${name}' es el mismo que este servidor (auto-registro ignorado)`);
         return res.status(200).json({ message: `Auto-registro de '${name}' ignorado`, status: "ACTIVO" });
@@ -143,7 +149,6 @@ router.post("/register", (req, res, next) => {
                    : reactivated   ? `Worker '${name}' reactivado exitosamente`
                    :                 `Worker '${name}' reconectado exitosamente`;
 
-        // Respuesta compatible con parcial-ssd-main: incluir token, timeout y clusterView
         const clusterView = {};
         if (engine.selfUrl) clusterView.leader = engine.selfUrl;
         if (engine.selfId)  clusterView.leaderId = engine.selfId;
@@ -539,8 +544,20 @@ router.post(["/heartbeat/:name", "/pulse/:name"], ensureLeader, (req, res) => {
         leaderId: engine.selfId,
         peers: engine.knownPeers().map(p => p.url)
     });
+
+    // ── Auto-corrección: Si el pulse incluye una URL pública, actualizar el registro ──
+    const pulseUrl = payload.url || "";
+    if (pulseUrl && !pulseUrl.includes("localhost") && !pulseUrl.includes("127.0.0.1") && pulseUrl !== w.url) {
+        logger.info("Registry", `⚡ [PULSE] URL de '${workerName}' actualizada: ${w.url} → ${pulseUrl}`);
+        w.url = pulseUrl;
+    }
+    // También actualizar capabilities si vienen en el pulse
+    const pulseCaps = payload.capabilities;
+    if (Array.isArray(pulseCaps) && pulseCaps.length > 0 && JSON.stringify(pulseCaps) !== JSON.stringify(w.capabilities)) {
+        w.capabilities = pulseCaps;
+        logger.info("Registry", `📋 [PULSE] Capacidades de '${workerName}' actualizadas: [${pulseCaps.join(", ")}]`);
+    }
     
-    // Respuesta compatible con parcial-ssd-main: incluir nextPulseMs y clusterView
     res.json({ 
         message: "pulse received", 
         name: workerName,

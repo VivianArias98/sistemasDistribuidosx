@@ -271,6 +271,25 @@ app.post("/inbox", (req, res) => {
     logger.msg(`Mensaje (inbox) de '${sender}': "${text}"`);
     res.json({ ok: true, received: true });
 });
+// Callback global para que pulse.service.js inyecte los mensajes del polling
+global._onMessageReceived = (msg) => {
+    let senderName = msg.sender || "Coordinador";
+    // Si viene del dashboard de Camilo, forzar a "Coordinador" para que la UI lo asigne al chat principal
+    if (senderName.toLowerCase().includes("admin") || senderName.toLowerCase().includes("dashboard") || senderName === parentName || senderName === parentUrl) {
+        senderName = "Coordinador";
+    }
+    const entry = {
+        id: "recv_" + Date.now() + Math.random(),
+        from: senderName,
+        fromUrl: null,
+        to: WORKER_NAME,
+        message: msg.message,
+        timestamp: msg.timestamp || Date.now(),
+        receivedAt: new Date().toLocaleTimeString()
+    };
+    inbox.unshift(entry);
+    if (inbox.length > 50) inbox.pop();
+};
 
 app.get("/messages", (req, res) => {
     res.json(inbox);
@@ -333,13 +352,55 @@ app.get("/api/contacts", async (req, res) => {
     try {
         const response = await axios.get(`${parentUrl}/api/status`, { timeout: 3000 });
         if (Array.isArray(response.data)) {
-            res.json({ leader: parentName !== "Coordinador" ? parentName : parentUrl, workers: response.data });
-        } else {
-            res.json({ leader: parentName !== "Coordinador" ? parentName : parentUrl, workers: [] });
+            return res.json({ leader: parentName !== "Coordinador" ? parentName : parentUrl, workers: response.data });
         }
-    } catch (error) {
-        res.json({ leader: parentName !== "Coordinador" ? parentName : parentUrl, workers: [] });
+    } catch (e) {
+        // Compatibilidad con SistemasDistribuidos-main
+        if (e.response && e.response.status === 404) {
+            let allWorkers = [];
+            let leaderName = parentName !== "Coordinador" ? parentName : parentUrl;
+            try {
+                const srvRes = await axios.get(`${parentUrl}/servers`, { timeout: 3000 });
+                const serversArr = Array.isArray(srvRes.data) ? srvRes.data : (srvRes.data.servers || []);
+                allWorkers = allWorkers.concat(serversArr.map(s => ({
+                    name: s.name,
+                    url: s.url,
+                    status: s.status === "active" ? "ACTIVO" : "CAIDO",
+                    role: "worker"
+                })));
+
+                const peersRes = await axios.get(`${parentUrl}/election/state`, { timeout: 3000 });
+                if (peersRes.data) {
+                    if (peersRes.data.leader) leaderName = peersRes.data.leader;
+                    const peersArr = Array.isArray(peersRes.data.peerDetails) ? peersRes.data.peerDetails : (Array.isArray(peersRes.data.peers) ? peersRes.data.peers : []);
+                    allWorkers = allWorkers.concat(peersArr.map(p => {
+                        if (typeof p === "string") {
+                            return { name: p, url: p, status: "ACTIVO", role: "follower" };
+                        }
+                        return {
+                            name: p.id || p.url,
+                            url: p.url,
+                            status: p.alive ? "ACTIVO" : "CAIDO",
+                            role: p.id === leaderName ? "leader" : "follower"
+                        };
+                    }));
+                    
+                    // Añadir al propio coordinador si no está
+                    if (!allWorkers.find(w => w.name === peersRes.data.id)) {
+                        allWorkers.unshift({
+                            name: peersRes.data.id,
+                            url: peersRes.data.url || parentUrl,
+                            status: "ACTIVO",
+                            role: peersRes.data.role
+                        });
+                    }
+                }
+            } catch (err2) {}
+            
+            return res.json({ leader: leaderName, workers: allWorkers });
+        }
     }
+    res.json({ leader: parentName !== "Coordinador" ? parentName : parentUrl, workers: [] });
 });
 
 app.post("/send-to", async (req, res) => {
@@ -349,9 +410,9 @@ app.post("/send-to", async (req, res) => {
     if (status === "registrado" && parentUrl) {
         try {
             // Enviar al coordinador para que lo enrute al destinatario correcto (worker o coordinador)
-            const resp = await axios.post(`${parentUrl}/api/send-message`, {
-                from: WORKER_NAME,
-                to: to,
+            const resp = await axios.post(`${parentUrl}/messages`, {
+                sender: WORKER_NAME,
+                target: to,
                 message: message
             }, { timeout: 5000, headers: { "ngrok-skip-browser-warning": "true" } });
 
@@ -542,6 +603,18 @@ app.post("/task/assign", async (req, res) => {
 
     logger.info(`Iniciando tarea ${taskId} de tipo ${taskType}`);
     journal.record("tarea_iniciada", { taskId, taskType });
+    
+    // Inyectar en el chat de la UI que se recibió la tarea
+    inbox.unshift({
+        id: "task_start_" + Date.now(),
+        from: "Coordinador",
+        fromUrl: null,
+        to: WORKER_NAME,
+        message: `⚙️ [NUEVA TAREA] ${taskType} | ID: ${taskId}`,
+        timestamp: Date.now(),
+        receivedAt: new Date().toLocaleTimeString()
+    });
+    if (inbox.length > 50) inbox.pop();
 
     let resultMsg;
 
@@ -584,6 +657,20 @@ app.post("/task/assign", async (req, res) => {
         try {
             console.log("📤 [JSON ENVIADO - RESULTADO]:", JSON.stringify(resultMsg, null, 2));
             await axios.post(`${parentUrl}/task/receive`, resultMsg, { timeout: 3000 });
+            
+            // Inyectar en el chat de la UI el resultado
+            const resTxt = resultMsg.data.status === "ok" ? JSON.stringify(resultMsg.data.result) : `Error: ${resultMsg.data.error}`;
+            inbox.unshift({
+                id: "task_res_" + Date.now(),
+                from: WORKER_NAME,
+                fromUrl: null,
+                to: "Coordinador",
+                message: `✅ [TAREA COMPLETADA] ${taskType} | Resultado: ${resTxt}`,
+                timestamp: Date.now(),
+                receivedAt: new Date().toLocaleTimeString()
+            });
+            if (inbox.length > 50) inbox.pop();
+            
         } catch (e) {
             logger.error(`No se pudo enviar el resultado de ${taskId} al coordinador: ${e.message}`);
         }

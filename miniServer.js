@@ -92,15 +92,64 @@ app.get("/api/contacts", async (req, res) => {
             const leaderRes = await axios.get(`${MIDDLEWARE_URL}/api/leader-info`, { timeout: 2000 });
             if (leaderRes.data && leaderRes.data.name) leaderName = leaderRes.data.name;
         } catch (err) {
-            // Ignorar si falla el nuevo endpoint
+            // Compatibilidad con SistemasDistribuidos-main
+            try {
+                const stateRes = await axios.get(`${MIDDLEWARE_URL}/election/state`, { timeout: 2000 });
+                if (stateRes.data && stateRes.data.leader) leaderName = stateRes.data.leader;
+            } catch (e) {}
         }
 
-        const response = await axios.get(`${MIDDLEWARE_URL}/api/status`, { timeout: 3000 });
-        if (Array.isArray(response.data)) {
-            res.json({ leader: leaderName, workers: response.data });
-        } else {
-            res.json({ leader: leaderName, workers: [] });
+        try {
+            const response = await axios.get(`${MIDDLEWARE_URL}/api/status`, { timeout: 3000 });
+            if (Array.isArray(response.data)) {
+                return res.json({ leader: leaderName, workers: response.data });
+            }
+        } catch (e) {
+            // Compatibilidad con SistemasDistribuidos-main
+            if (e.response && e.response.status === 404) {
+                let allWorkers = [];
+                try {
+                    const srvRes = await axios.get(`${MIDDLEWARE_URL}/servers`, { timeout: 3000 });
+                    const serversArr = Array.isArray(srvRes.data) ? srvRes.data : (srvRes.data.servers || []);
+                    allWorkers = allWorkers.concat(serversArr.map(s => ({
+                        name: s.name,
+                        url: s.url,
+                        status: s.status === "active" ? "ACTIVO" : "CAIDO",
+                        role: "worker"
+                    })));
+
+                    const peersRes = await axios.get(`${MIDDLEWARE_URL}/election/state`, { timeout: 3000 });
+                    if (peersRes.data) {
+                        const peersArr = Array.isArray(peersRes.data.peerDetails) ? peersRes.data.peerDetails : (Array.isArray(peersRes.data.peers) ? peersRes.data.peers : []);
+                        allWorkers = allWorkers.concat(peersArr.map(p => {
+                            if (typeof p === "string") {
+                                return { name: p, url: p, status: "ACTIVO", role: "follower" };
+                            }
+                            return {
+                                name: p.id || p.url,
+                                url: p.url,
+                                status: p.alive ? "ACTIVO" : "CAIDO",
+                                role: p.id === leaderName ? "leader" : "follower"
+                            };
+                        }));
+                        
+                        // Añadir al propio coordinador si no está
+                        if (!allWorkers.find(w => w.name === peersRes.data.id)) {
+                            allWorkers.unshift({
+                                name: peersRes.data.id,
+                                url: peersRes.data.url || MIDDLEWARE_URL,
+                                status: "ACTIVO",
+                                role: peersRes.data.role
+                            });
+                        }
+                    }
+                } catch (err2) {}
+                
+                return res.json({ leader: leaderName, workers: allWorkers });
+            }
         }
+        
+        res.json({ leader: leaderName, workers: [] });
     } catch (e) {
         res.status(500).json({ error: "No se pudo obtener contactos" });
     }
@@ -171,7 +220,11 @@ app.post("/send-message", async (req, res) => {
     }
 
     try {
-        const response = await axios.post(`${MIDDLEWARE_URL}/send-message/${NAME}`, { message });
+        const response = await axios.post(`${MIDDLEWARE_URL}/messages`, { 
+            sender: NAME, 
+            message, 
+            target: "Coordinador" 
+        });
         console.log(`📤 Mensaje enviado al middleware: "${message}"`);
         res.json({ status: "success", serverResponse: response.data });
     } catch (error) {
@@ -191,9 +244,10 @@ app.post("/send-to", async (req, res) => {
     }
 
     try {
-        const response = await axios.post(`${MIDDLEWARE_URL}/api/send-message`, {
-            from: NAME,
-            to,
+        // Enviar a `/messages` para que el coordinador lo maneje (o lo enrute)
+        const response = await axios.post(`${MIDDLEWARE_URL}/messages`, {
+            sender: NAME,
+            target: to,
             message
         });
 
@@ -371,6 +425,38 @@ function startHeartbeatLoop() {
             // Actualizar lista de peers conocidos para failover
             if (resp.data && resp.data.peers) {
                 knownPeers = resp.data.peers;
+            }
+
+            // [COMPATIBILIDAD] Polling de mensajes para SistemasDistribuidos-main
+            // Este coordinador almacena mensajes en memoria en vez de hacer push a /receive-message
+            try {
+                const pollResp = await axios.get(`${MIDDLEWARE_URL}/send-message/${NAME}`, { timeout: 2000 });
+                if (pollResp.data && Array.isArray(pollResp.data.messages)) {
+                    pollResp.data.messages.forEach(msg => {
+                        // Solo procesar si no lo tenemos en nuestro historial
+                        const exists = allMessagesHistory.some(m => m.id === msg.id || (m.timestamp === msg.timestamp && m.message === msg.message));
+                        if (!exists) {
+                            const entry = {
+                                id: msg.id || "recv_" + Date.now(),
+                                from: msg.sender || "Coordinador",
+                                to: NAME,
+                                message: msg.message,
+                                timestamp: msg.timestamp || Date.now(),
+                                receivedAt: new Date().toLocaleTimeString()
+                            };
+                            allMessagesHistory.unshift(entry);
+                            
+                            console.log("---------------------------------------------------------");
+                            console.log(`📥 [MENSAJE RECIBIDO (Polling)]`);
+                            console.log(`   👤 De:      ${entry.from}`);
+                            console.log(`   💬 Mensaje: "${entry.message}"`);
+                            console.log(`   ⏰ Hora:    ${entry.receivedAt}`);
+                            console.log("---------------------------------------------------------");
+                        }
+                    });
+                }
+            } catch (pollErr) {
+                // Ignorar 404 (el coordinador es sistemasDistribuidosx y usa PUSH, o la ruta no existe)
             }
         } catch (error) {
             if (error.response?.status === 409 && error.response?.data?.leader) {
