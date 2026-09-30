@@ -123,14 +123,30 @@ function registerHandler(name, handler) {
 }
 
 // ─── Mapa base de capacidades conocidas ──────────────────────────────────────
+
+/**
+ * generate_password: Genera una contraseña aleatoria de la longitud especificada.
+ */
+function generatePassword(payload) {
+    const length = parseInt(payload?.length || 12, 10);
+    if (length < 1 || length > 256) throw new Error("La longitud debe estar entre 1 y 256");
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let password = "";
+    for (let i = 0; i < length; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return { password };
+}
+
 const builtinHandlers = {
-    "math_compute":    mathCompute,
-    "http_fetch":      httpFetch,
-    "search_text":     searchText,
-    "stats_compute":   statsCompute,
-    "vector_distance": vectorDistance,
-    "http_latency":    httpLatency,
-    "count_vowels":    countVowels,
+    "math_compute":      mathCompute,
+    "http_fetch":        httpFetch,
+    "search_text":       searchText,
+    "stats_compute":     statsCompute,
+    "vector_distance":   vectorDistance,
+    "http_latency":      httpLatency,
+    "count_vowels":      countVowels,
+    "generate_password": generatePassword,
 };
 
 /**

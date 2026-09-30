@@ -75,8 +75,9 @@ router.post("/election/ping", (req, res) => {
                 if (registry.resolve(id)) {
                     registry.pulse(id);
                 } else {
-                    registry.register(id, url, ip, { platform: body.platform || "coordinador-peer", hostname: id });
-                    logger.info("REGISTRY", `📝 Peer registrado en Naming Service: [${id}] @ ${url}`);
+                    // [MODIFICADO] Comentado para evitar que un Coordinador-Peer se auto-registre en la tabla de Workers
+                    // registry.register(id, url, ip, { platform: body.platform || "coordinador-peer", hostname: id });
+                    // logger.info("REGISTRY", `📝 (omitido) Peer ${id} no será registrado como worker`);
                 }
             } catch (_) {
                 try { registry.pulse(id); } catch (__) {}
@@ -110,7 +111,12 @@ router.post("/election/ping", (req, res) => {
             from: { id: snap.id, url: snap.url, role: snap.role, currentLeader: snap.leader },
             currentLeader: snap.leader,
             currentTerm: snap.term,
-        }
+        },
+        // Campos planos para compatibilidad con parcial-ssd-main
+        ...snap,
+        algo: "bully",
+        message: "pong de tan",
+        ok: true
     });
 });
 

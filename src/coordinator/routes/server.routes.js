@@ -142,7 +142,24 @@ router.post("/register", (req, res, next) => {
         const msg  = created       ? `Worker '${name}' registrado exitosamente`
                    : reactivated   ? `Worker '${name}' reactivado exitosamente`
                    :                 `Worker '${name}' reconectado exitosamente`;
-        return res.status(code).json({ message: msg, status: "ACTIVO", worker, leaderId: engine.selfId });
+
+        // Respuesta compatible con parcial-ssd-main: incluir token, timeout y clusterView
+        const clusterView = {};
+        if (engine.selfUrl) clusterView.leader = engine.selfUrl;
+        if (engine.selfId)  clusterView.leaderId = engine.selfId;
+        clusterView.peers = engine.knownPeers().map(p => p.url).concat(engine.selfUrl).filter(Boolean);
+
+        return res.status(code).json({
+            message: msg,
+            name: name,
+            status: "ACTIVO",
+            worker,
+            leaderId: engine.selfId,
+            token: worker?.token || `tok-${Date.now().toString(36)}`,
+            timeout: config.workerTimeoutMs,
+            suggestedPulseMs: Math.floor(config.workerTimeoutMs / 3),
+            ...clusterView
+        });
     } catch (err) {
         if (err.code === "IP_CONFLICT") {
             return res.status(409).json({ error: err.message, code: "IP_CONFLICT" });
@@ -496,29 +513,41 @@ router.get(["/naming", "/servers"], (_req, res) => {
 });
 
 /**
- * POST /unregister/:name — Desregistro voluntario
+ * POST|DELETE /unregister/:name — Desregistro voluntario
+ * Soporta DELETE para compatibilidad con parcial-ssd-main
  */
-router.post("/unregister/:name", (req, res) => {
+const unregisterHandler = (req, res) => {
     const ok = registry.unregister(req.params.name);
     if (!ok) return res.status(404).json({ error: `Worker '${req.params.name}' no encontrado` });
     res.json({ message: `Worker '${req.params.name}' desregistrado` });
-});
+};
+router.post("/unregister/:name", unregisterHandler);
+router.delete("/unregister/:name", unregisterHandler);
 
 // ─── HEARTBEAT / PULSE ────────────────────────────────────────────────────────
 
 router.post(["/heartbeat/:name", "/pulse/:name"], ensureLeader, (req, res) => {
     const payload = req.body.type === "pulse" && req.body.data ? req.body.data : req.body;
     const workerName = payload.id || req.params.name;
-    const load = payload.load || 0;
+    const load = typeof payload.load === "number" ? payload.load : 0;
 
-    const w = registry.pulse(workerName, load); // Asumiendo que modificaremos registry.pulse para aceptar load
-    if (!w) return res.status(404).json({ error: `Worker '${workerName}' no registrado`, mustRegister: true });
-    
-    // Adjuntar la vista del clúster (Fase 4 y 5)
-    res.json({ 
-        message: "Pulse received", 
+    const w = registry.pulse(workerName, load);
+    if (!w) return res.status(404).json({
+        error: "server not registered",
+        action: "re-register",
         leader: engine.selfUrl,
-        peers: engine.knownPeers().map(p => p.url),
+        leaderId: engine.selfId,
+        peers: engine.knownPeers().map(p => p.url)
+    });
+    
+    // Respuesta compatible con parcial-ssd-main: incluir nextPulseMs y clusterView
+    res.json({ 
+        message: "pulse received", 
+        name: workerName,
+        leader: engine.selfUrl,
+        leaderId: engine.selfId,
+        peers: engine.knownPeers().map(p => p.url).concat(engine.selfUrl).filter(Boolean),
+        nextPulseMs: Math.floor(config.workerTimeoutMs / 3),
         status: "ACTIVO", 
         lastHeartbeat: w.lastHeartbeat 
     });
@@ -552,8 +581,9 @@ router.post("/send-message/:name", ensureLeader, (req, res) => {
 /**
  * POST /receive-message — Para recibir mensajes de otros nodos (Coordinadores o Workers)
  */
-router.post("/receive-message", async (req, res) => {
-    const { from, to, message, timestamp } = req.body;
+router.post(["/receive-message", "/messages"], async (req, res) => {
+    let { from, to, message, timestamp, sender } = req.body;
+    from = from || sender || "Anónimo";
     if (!message) return res.status(400).json({ error: "Falta 'message'" });
     
     const target = to || "Coordinador";
@@ -678,7 +708,8 @@ router.post("/api/send-message", async (req, res) => {
     }
 
     try {
-        const endpoint = targetUrl.replace(/\/$/, "") + "/receive-message";
+        // Fallback para enviar a /messages (compatible con SistemasDistribuidos-main)
+        const endpoint = targetUrl.replace(/\/$/, "") + "/messages";
         const axios = require("axios");
         
         // Determinar fromUrl
@@ -690,7 +721,8 @@ router.post("/api/send-message", async (req, res) => {
             if (senderWorker) fromUrl = senderWorker.url;
         }
         
-        const resp = await axios.post(endpoint, { from, to, message, timestamp: entry.timestamp, fromUrl }, { 
+        // Incluir 'sender' para compatibilidad con SistemasDistribuidos-main
+        const resp = await axios.post(endpoint, { from, to, message, timestamp: entry.timestamp, fromUrl, sender: from }, { 
             timeout: 4000,
             headers: { "ngrok-skip-browser-warning": "true" }
         });
@@ -801,7 +833,8 @@ router.post("/task/receive", (req, res) => {
     pendingTasks.delete(taskId);
     
     // Construir mensaje enriquecido con los datos de la operación y el resultado
-    const sender = req.query.workerId || "Sistema";
+    // Compatibilidad: leer workerId del body.data (parcial-ssd-main) o del query param (nuestro formato)
+    const sender = body.data.workerId || req.query.workerId || "Sistema";
     const receiver = engine.selfId || "Coordinador";
     
     let msgText;
@@ -874,6 +907,28 @@ router.get("/api/status", (req, res) => {
         const wUrl  = (w.url  || "").replace(/\/$/, "");
         return wName !== selfId && wUrl !== selfUrl;
     });
+    // Agregar peers descubiertos por Gossip (Ping) que no se registraron explícitamente por /register
+    clusterPeers.forEach(peer => {
+        const pUrl = (peer.url || "").replace(/\/$/, "");
+        if (!pUrl || pUrl === selfUrl || peer.id === selfId) return;
+        
+        const exists = validWorkers.find(w => (w.url || "").replace(/\/$/, "") === pUrl || w.name === peer.id);
+        if (!exists) {
+            validWorkers.push({
+                name: peer.id || peer.url,
+                url: peer.url,
+                status: peer.alive ? "ACTIVO" : "CAIDO",
+                role: peer.snapshot?.role || (peer.id === engine.leaderId ? "leader" : "follower"),
+                platform: "Gossip",
+                hostname: "Peer",
+                capabilities: [],
+                hasPulse: peer.alive,
+                secondsWithoutPulse: peer.alive ? 0 : 999
+            });
+        }
+    });
+    
+    // console.log("API STATUS RETURNING:", validWorkers); // debug
     
     res.json(validWorkers.map(w => {
         let role = w.role || "worker";

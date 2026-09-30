@@ -324,9 +324,6 @@ async function _tick() {
 
         try {
             const snap = engine.snapshot();
-            // Payload dual-formato:
-            // - Nuestro formato: { id, url, role, leader, peers }
-            // - Formato Juan Diego: { from: {id, url, role, currentLeader, term}, peers }
             const pingPayload = {
                 type: "ping",
                 data: {
@@ -339,7 +336,11 @@ async function _tick() {
                         currentLeader: snap.leader,
                         term: snap.term,
                     },
-                }
+                },
+                // Campos en el root para compatibilidad con parcial-ssd-main
+                from: { id: snap.id, url: snap.url },
+                peers: engine.knownPeers().map(p => p.url).concat(engine.selfUrl).filter(Boolean),
+                algo: "bully"
             };
             const resp = await transport.post(
                 `${url}/election/ping`,
@@ -377,8 +378,11 @@ async function _tick() {
                 }).catch(() => { });
             }
 
-            // Actualizar el ID real del peer desde su respuesta
-            const resolvedId = data.id || peer.id || url;
+            // Log debug para entender qué responde
+            logger.info(engine.selfId, `[DEBUG-PONG] PONG de ${url}: ${JSON.stringify(data).substring(0, 200)}`);
+            
+            // Actualizar el ID real del peer desde su respuesta (soporte para formato antiguo anidado y formato plano)
+            const resolvedId = data.id || (data.data && data.data.id) || (data.from && data.from.id) || peer.id || url;
             peers.set(url, {
                 ...peer,
                 id: resolvedId,
@@ -388,13 +392,18 @@ async function _tick() {
             });
 
             // Descubrimiento transitivo: incorporar peers del peer
-            if (Array.isArray(data.peers)) {
+            let peersArray = data.peers || [];
+            if (data.data && Array.isArray(data.data.peers)) peersArray = data.data.peers;
+            
+            if (Array.isArray(peersArray)) {
                 const cleanSelf = engine.selfUrl ? engine.selfUrl.replace(/\/$/, "") : null;
-                for (const p of data.peers) {
-                    const rawUrl = p.url || p.baseUrl || p.selfUrl || p.address || null;
-                    const pId = p.id || p.nodeId || p.selfId || p.name || null;
+                for (const p of peersArray) {
+                    // Soportar arreglo de strings (parcial-ssd-main) o arreglo de objetos (sistemasDistribuidosx)
+                    const isString = typeof p === 'string';
+                    const rawUrl = isString ? p : (p.url || p.baseUrl || p.selfUrl || p.address || null);
+                    const pId = isString ? null : (p.id || p.nodeId || p.selfId || p.name || null);
                     const cleanPUrl = rawUrl ? rawUrl.replace(/\/$/, "") : null;
-                    if (cleanPUrl && cleanPUrl !== cleanSelf && isValidPeer(pId)) {
+                    if (cleanPUrl && cleanPUrl !== cleanSelf && isValidPeer(pId || cleanPUrl)) {
                         if (!peers.has(cleanPUrl)) {
                             engine.upsertPeer(pId, cleanPUrl, { discoveredVia: resolvedId });
                             logger.gossip(engine.selfId, `Nuevo peer descubierto transitivamente: ${pId} (${cleanPUrl}) vía ${resolvedId}`);

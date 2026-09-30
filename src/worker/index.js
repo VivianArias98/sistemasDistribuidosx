@@ -78,8 +78,13 @@ async function huntForLeader() {
             journal.record("pregunta", { coordinador: url });
             try {
                 // El trabajador intenta conectarse al coordinador con sus capacidades reales
+                // Se envían campos planos para compatibilidad con SistemasDistribuidos-main
                 const resp = await axios.post(`${url}/register`, {
                     type: "register",
+                    name: WORKER_NAME,
+                    url: WORKER_URL,
+                    role: "worker",
+                    capabilities,
                     data: {
                         id: WORKER_NAME,
                         url: WORKER_URL,
@@ -247,8 +252,46 @@ app.post("/receive-message", (req, res) => {
     res.json({ ok: true, received: true });
 });
 
+// Alias /inbox para compatibilidad con parcial-ssd-main (el coordinador entrega mensajes aquí)
+app.post("/inbox", (req, res) => {
+    const { from, name, message, timestamp } = req.body;
+    const sender = from || name || "desconocido";
+    const text = message || "";
+    if (!text) return res.status(400).json({ error: "Se requiere 'message'" });
+    const entry = {
+        id: "recv_" + Date.now(),
+        from: sender,
+        to: WORKER_NAME,
+        message: text,
+        timestamp: timestamp || Date.now(),
+        receivedAt: new Date().toLocaleTimeString()
+    };
+    inbox.unshift(entry);
+    if (inbox.length > 50) inbox.pop();
+    logger.msg(`Mensaje (inbox) de '${sender}': "${text}"`);
+    res.json({ ok: true, received: true });
+});
+
 app.get("/messages", (req, res) => {
     res.json(inbox);
+});
+
+// POST /coordinators — El coordinador parcial-ssd-main "invita" al worker a conectarse
+app.post("/coordinators", async (req, res) => {
+    const url = (req.body?.url || "").trim().replace(/\/+$/, "");
+    if (!/^https?:\/\//.test(url)) {
+        return res.status(400).json({ ok: false, error: "URL inválida" });
+    }
+    if (!COORDINATORS.includes(url)) {
+        COORDINATORS.push(url);
+    }
+    logger.info(`Coordinador agregado por invitación: ${url}`);
+    // Si no estamos registrados con nadie, intentar conectarse
+    if (status !== "registrado") {
+        parentUrl = url;
+        // Reiniciar el mainLoop se encargará de registrarse
+    }
+    res.json({ ok: true, registered: status === "registrado", coordinator: parentUrl });
 });
 
 app.get("/", (req, res) => {
@@ -372,11 +415,81 @@ function startInteractiveChat() {
 }
 
 app.get("/task/capabilities", (req, res) => {
-    // Retorna SOLO las capacidades declaradas por ESTE worker
-    // También adjunta el 'schema' (estructura esperada) de las capacidades extra,
-    // para que el coordinador aprenda automáticamente cómo armar el JSON.
+    // Formato compatible con parcial-ssd-main: objetos descriptivos con type, description, payload, example, result
+    const CAPABILITY_DESCRIPTIONS = {
+        vector_distance: {
+            description: "Distancia entre dos vectores de dos dimensiones",
+            payload: { a: "number[2]", b: "number[2]" },
+            example: { a: [0, 0], b: [3, 4] },
+            result: { distance: "number" }
+        },
+        http_latency: {
+            description: "Latencia en milisegundos de una URL",
+            payload: { url: "string" },
+            example: { url: "https://example.com" },
+            result: { ms: "number" }
+        },
+        generate_password: {
+            description: "Genera una contraseña aleatoria de la longitud especificada",
+            payload: { length: "number (opcional, por defecto 12)" },
+            example: { length: 16 },
+            result: { password: "string" }
+        },
+        math_compute: {
+            description: "Calculadora básica: una operación y dos operandos",
+            payload: { operation: "add | sub | mul | div", a: "number", b: "number" },
+            example: { operation: "add", a: 10, b: 5 },
+            result: { result: "number" }
+        },
+        http_fetch: {
+            description: "Hace fetch a una URL y devuelve status y cuerpo",
+            payload: { url: "string" },
+            example: { url: "https://example.com" },
+            result: { status: "number", body: "any" }
+        },
+        search_text: {
+            description: "Cuenta cuántas veces aparece el query dentro del texto",
+            payload: { text: "string", query: "string" },
+            example: { text: "hola mundo hola", query: "hola" },
+            result: { count: "number" }
+        },
+        stats_compute: {
+            description: "Promedio, mínimo y máximo de una lista de números",
+            payload: { numbers: "number[]" },
+            example: { numbers: [1, 2, 3, 4, 5] },
+            result: { mean: "number", min: "number", max: "number" }
+        },
+        count_vowels: {
+            description: "Cuenta las vocales de un texto",
+            payload: { text: "string" },
+            example: { text: "hola mundo" },
+            result: { vowels: "number" }
+        }
+    };
+
+    // Obtener las capacidades reales del tasks.service
+    const allCapabilities = tasks.getSupportedCapabilities();
+
+    const capabilitiesDetail = allCapabilities.map(type => {
+        const desc = CAPABILITY_DESCRIPTIONS[type] || {};
+        return {
+            type,
+            description: desc.description || type,
+            payload: desc.payload || null,
+            example: desc.example || null,
+            result: desc.result || null
+        };
+    });
+
+    // Respuesta compatible con parcial-ssd-main Y con nuestro formato
     res.json({
-        capabilities: DEFAULT_CAPABILITIES,
+        type: "capabilities",
+        data: {
+            id: WORKER_NAME,
+            capabilities: capabilitiesDetail
+        },
+        // Mantener retrocompatibilidad con nuestro coordinador
+        capabilities: allCapabilities,
         schemas: {
             "generate_password": { "length": 12 }
         }
@@ -396,25 +509,27 @@ app.post("/task/assign", async (req, res) => {
     const { taskId, type: taskType, payload } = reqBody.data;
     if (!taskId || !taskType) return res.status(400).json({ error: "Falta taskId o type" });
 
-    // ✔️ GUARDIA DE CAPACIDADES: verificar que este worker puede hacer la tarea
-    // Si no está en las capacidades declaradas, retornar error inmediato al coordinador
-    if (!DEFAULT_CAPABILITIES.includes(taskType)) {
+    // ✔️ GUARDIA DE CAPACIDADES: verificar con las capacidades reales del tasks.service
+    const allCapabilities = tasks.getSupportedCapabilities();
+    if (!allCapabilities.includes(taskType)) {
         const errorResult = {
             type: "task-result",
             data: {
                 taskId,
                 status: "error",
-                error: `Este worker no puede realizar la tarea '${taskType}'. Mis capacidades son: [${DEFAULT_CAPABILITIES.join(", ")}]`
+                error: `Este worker no puede realizar la tarea '${taskType}'. Mis capacidades son: [${allCapabilities.join(", ")}]`,
+                workerId: WORKER_NAME,
+                taskType: taskType
             }
         };
         logger.warn(`Tarea rechazada: '${taskType}' no está en mis capacidades`);
         journal.record("tarea_rechazada", { taskId, taskType });
-        // Responder al coordinador con HTTP 200 (aceptamos el mensaje) y enviar el error por task-result
-        res.json({ ok: true, message: "Tarea rechazada: capacidad no soportada" });
+        // Responder 400 con formato compatible con parcial-ssd-main
+        res.status(400).json({ type: "error", data: { message: `No tengo la capacidad '${taskType}'`, capabilities: allCapabilities } });
         if (parentUrl) {
             try {
                 console.log("📤 [JSON ENVIADO - RECHAZO]:", JSON.stringify(errorResult, null, 2));
-                await axios.post(`${parentUrl}/task/receive?workerId=${WORKER_NAME}`, errorResult, { timeout: 3000 });
+                await axios.post(`${parentUrl}/task/receive`, errorResult, { timeout: 3000 });
             } catch (e) {
                 logger.error(`No se pudo notificar rechazo de ${taskId}: ${e.message}`);
             }
@@ -422,8 +537,8 @@ app.post("/task/assign", async (req, res) => {
         return;
     }
 
-    // Responder inmediatamente para liberar al coordinador
-    res.json({ ok: true, message: "Tarea encolada" });
+    // Responder inmediatamente con 202 (Accepted) — formato compatible con parcial-ssd-main
+    res.status(202).json({ type: "task-accepted", data: { taskId, workerId: WORKER_NAME } });
 
     logger.info(`Iniciando tarea ${taskId} de tipo ${taskType}`);
     journal.record("tarea_iniciada", { taskId, taskType });
@@ -442,7 +557,9 @@ app.post("/task/assign", async (req, res) => {
             data: {
                 taskId,
                 status: "ok",
-                result
+                result,
+                workerId: WORKER_NAME,
+                taskType: taskType
             }
         };
         logger.info(`Tarea ${taskId} completada exitosamente`);
@@ -453,20 +570,20 @@ app.post("/task/assign", async (req, res) => {
             data: {
                 taskId,
                 status: "error",
-                error: err.message
+                error: err.message,
+                workerId: WORKER_NAME,
+                taskType: taskType
             }
         };
         logger.error(`Error en tarea ${taskId}: ${err.message}`);
         journal.record("tarea_error", { taskId, error: err.message });
     }
 
-    // Enviar el resultado al coordinador actual
+    // Enviar el resultado al coordinador actual (workerId dentro del body para compatibilidad)
     if (parentUrl) {
         try {
-            // Log para monitorear el JSON saliente (Resultado)
             console.log("📤 [JSON ENVIADO - RESULTADO]:", JSON.stringify(resultMsg, null, 2));
-            // Pasamos el workerId por query parameter para NO alterar el JSON estricto del examen
-            await axios.post(`${parentUrl}/task/receive?workerId=${WORKER_NAME}`, resultMsg, { timeout: 3000 });
+            await axios.post(`${parentUrl}/task/receive`, resultMsg, { timeout: 3000 });
         } catch (e) {
             logger.error(`No se pudo enviar el resultado de ${taskId} al coordinador: ${e.message}`);
         }
@@ -486,8 +603,26 @@ app.post("/start-pulse", (_req, res) => {
 app.post("/shutdown", (_req, res) => {
     status = "apagado";
     pulse.stop();
-    res.json({ ok: true, message: "Worker apagado" });
+    res.json({ ok: true, message: `${WORKER_NAME} dejó de enviar pulsos` });
     setTimeout(() => process.exit(0), 500);
+});
+
+// ─── GET /health — Sonda activa del coordinador (compatibilidad con parcial-ssd-main) ──
+app.get("/health", (_req, res) => {
+    res.json({
+        status: "ok",
+        name: WORKER_NAME,
+        uptimeMs: Math.floor(process.uptime() * 1000),
+        pulsing: status === "registrado",
+        registered: status === "registrado",
+        load: parseFloat((Math.random() * 0.5).toFixed(2)),
+        host: {
+            hostname: require("os").hostname(),
+            platform: require("os").platform(),
+            arch: require("os").arch(),
+            node: process.version
+        }
+    });
 });
 
 // ─── Inicio ────────────────────────────────────────────────────────────────────
