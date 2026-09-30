@@ -105,7 +105,7 @@ class BullyStrategy extends ElectionStrategy {
 
         } else if (type === "COORDINATOR" || type === "leader-announce") {
             // Si recibo un leader-announce de alguien menor que yo (prioridad ID menor) -> convoco elección
-            if (isHigher(e.selfId, from.id) && e.role !== "follower") {
+            if (isHigher(e.selfId, from.id)) {
                 logger.election(e.selfId, `leader-announce de ${from.id} rechazado (menor que yo) — no lo acepto, convoco elección`);
                 res.json({ ok: true });
                 setImmediate(() => this.startElection());

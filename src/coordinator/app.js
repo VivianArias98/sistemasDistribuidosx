@@ -93,9 +93,25 @@ app.post("/api/setup", async (req, res) => {
         await init("bully");
         engine._started = true;
     } else {
+        const oldId = engine.selfId;
+        const oldLeaderId = engine.leaderId;
+        
         if (engine.role === "leader") {
             engine.leaderId = nodeId;
         }
+        
+        // Si el ID cambió estando ya en marcha, revisamos si es necesario convocar una elección
+        if (oldId && oldId !== "UNCONFIGURED" && oldId !== nodeId) {
+            const { isHigher } = require("./election/ids");
+            if (engine.role === "leader") {
+                // Si yo era líder, aviso que cambié de nombre. Podría haber alguien mayor ahora.
+                engine.triggerElection().catch(() => {});
+            } else if (engine.leaderId && isHigher(nodeId, engine.leaderId)) {
+                // Si ahora tengo un ID mayor que el líder actual
+                engine.triggerElection().catch(() => {});
+            }
+        }
+        
         // Ya estaba corriendo → solo agregar el peer nuevo
         if (cleanPeer) {
             engine.allowPeer(cleanPeer);

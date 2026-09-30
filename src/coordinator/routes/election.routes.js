@@ -102,6 +102,26 @@ router.post("/election/ping", (req, res) => {
 
     // Respuesta compatible con ambos formatos (nuestro + Juan Diego + Parcial):
     const snap = engine.snapshot();
+    
+    // SPLIT BRAIN RESOLUTION INCOMING:
+    // Si el que nos hace PING dice ser líder, y yo también soy líder, y yo soy mayor
+    if (body.role === "leader" && snap.role === "leader" && id && id !== snap.id) {
+        const { isHigher } = require("../election/ids");
+        if (isHigher(snap.id, id)) {
+            logger.warn("PING", `Split-brain: ${id} se cree líder pero yo soy mayor. Forzando dimisión asíncrona.`);
+            setTimeout(() => {
+                const transport = require("../election/transport");
+                transport.post(`${url}/election/trigger`, {}, { timeout: 2000 }).catch(() => {});
+                transport.post(`${url}/election/message`, {
+                    type: "leader-announce",
+                    data: { leaderId: snap.id, leaderUrl: snap.url, priority: parseInt(snap.id.replace(/\\D/g, "") || "0") },
+                    from: { id: snap.id, url: snap.url },
+                    payload: { term: snap.term, priority: parseInt(snap.id.replace(/\\D/g, "") || "0") }
+                }, { timeout: 2000 }).catch(() => {});
+            }, 100);
+        }
+    }
+
     res.json({
         type: "pong",
         data: {

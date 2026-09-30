@@ -960,6 +960,17 @@ router.get("/api/status", (req, res) => {
             }
         }
 
+        let hasPulse = w.hasPulse;
+        let secondsWithoutPulse = w.secondsWithoutPulse;
+
+        if (w.lastHeartbeat) {
+            hasPulse = (now - w.lastHeartbeat) <= config.workerTimeoutMs;
+            secondsWithoutPulse = Math.floor((now - w.lastHeartbeat) / 1000);
+        } else {
+            if (hasPulse === undefined) hasPulse = true;
+            if (secondsWithoutPulse === undefined) secondsWithoutPulse = 0;
+        }
+
         return {
             name: w.name, 
             url: w.url, 
@@ -970,9 +981,9 @@ router.get("/api/status", (req, res) => {
             localPort: w.localPort,
             load: w.load || 0,
             capabilities: w.capabilities || [],
-            hasPulse: (now - w.lastHeartbeat) <= config.workerTimeoutMs,
-            secondsWithoutPulse: Math.floor((now - w.lastHeartbeat) / 1000),
-            lastHeartbeat: w.lastHeartbeat,
+            hasPulse: hasPulse,
+            secondsWithoutPulse: secondsWithoutPulse,
+            lastHeartbeat: w.lastHeartbeat || now,
             lastMessage: w.messages?.at(-1) || null,
         };
     }));

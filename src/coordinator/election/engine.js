@@ -121,10 +121,25 @@ const engine = {
         if (oldId && id && oldId !== id && oldId !== cleanUrl) {
             logger.warn(engine.selfId, `Peer renombrado en ${cleanUrl}: era '${oldId}', ahora es '${id}'`);
 
+            const { isHigher } = require("./ids");
+
             // Si el peer que se acaba de renombrar era nuestro líder reconocido, actualizamos el tracker de líder
             if (engine.leaderId === oldId) {
                 engine.leaderId = id;
                 logger.warn(engine.selfId, `El líder actual ha cambiado su nombre a '${id}'`);
+                
+                // Si el líder se renombró y ahora tiene un ID menor al nuestro, convocamos elección
+                if (isHigher(engine.selfId, id)) {
+                    logger.election(engine.selfId, `El líder renombrado (${id}) es menor que yo. Inicio elección.`);
+                    engine.triggerElection().catch(() => {});
+                }
+            } else {
+                // Si otro nodo se renombró, y resulta que su nuevo ID es mayor que el líder actual
+                const currentLeaderId = engine.role === "leader" ? engine.selfId : engine.leaderId;
+                if (currentLeaderId && isHigher(id, currentLeaderId)) {
+                    logger.election(engine.selfId, `El peer renombrado (${id}) tiene mayor prioridad que el líder actual (${currentLeaderId}). Inicio elección.`);
+                    engine.triggerElection().catch(() => {});
+                }
             }
         }
     },
@@ -430,6 +445,23 @@ async function _tick() {
                         role = "follower";
                         leaderId = resolvedId;
                         leaderUrl = data.url || url;
+                    } else {
+                        // SPLIT BRAIN RESOLUTION:
+                        // Yo soy mayor y él sigue creyéndose líder. Le fuerzo a dimitir.
+                        logger.election(engine.selfId, `Gossip: Split-brain detectado. El peer ${resolvedId} se cree líder pero yo soy mayor. Forzando su dimisión.`);
+                        transport.post(`${url}/election/trigger`, {}, { timeout: 2000 }).catch(() => {});
+                        
+                        // También le enviamos el leader-announce con ambos formatos por compatibilidad
+                        transport.post(`${url}/election/message`, {
+                            type: "leader-announce",
+                            data: {
+                                leaderId: engine.selfId,
+                                leaderUrl: engine.selfUrl,
+                                priority: parseInt(engine.selfId.replace(/\D/g, "") || "0")
+                            },
+                            from: { id: engine.selfId, url: engine.selfUrl },
+                            payload: { term, priority: parseInt(engine.selfId.replace(/\D/g, "") || "0") }
+                        }, { timeout: 2000 }).catch(() => {});
                     }
                 }
             }
