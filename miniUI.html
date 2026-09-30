@@ -38,7 +38,8 @@
         #main-container { flex: 1; display: flex; justify-content: center; align-items: center; padding: 2rem; position: relative; min-height: 0; }
         
         /* Connection Modal */
-        #connect-modal { width: 100%; max-width: 450px; padding: 2.5rem; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        #connect-modal-overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.6); z-index: 99; justify-content: center; align-items: center; }
+        #connect-modal { width: 100%; max-width: 450px; padding: 2.5rem; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); position: relative; }
         #connect-modal h2 { margin-bottom: 0.5rem; font-weight: 600; }
         #connect-modal p { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.95rem; }
         .input-group { display: flex; flex-direction: column; text-align: left; margin-bottom: 1.5rem; }
@@ -49,8 +50,8 @@
         button:hover { background: var(--primary-hover); transform: translateY(-1px); }
         button:active { transform: translateY(1px); }
 
-        /* Dashboard View (Hidden by default) */
-        #dashboard-view { display: none; width: 100%; height: 100%; max-width: 1200px; gap: 1.5rem; min-height: 0; }
+        /* Dashboard View */
+        #dashboard-view { display: flex; width: 100%; height: 100%; max-width: 1200px; gap: 1.5rem; min-height: 0; }
         .sidebar { width: 300px; display: flex; flex-direction: column; gap: 1rem; min-height: 0; }
         .card { padding: 1.5rem; flex: 1; display: flex; flex-direction: column; min-height: 0; }
         .card h3 { margin-bottom: 1rem; font-size: 1.1rem; color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
@@ -95,21 +96,24 @@
     </header>
 
     <div id="main-container">
-        <!-- CONNECTION MODAL -->
-        <div id="connect-modal" class="glass">
-            <h2>Conectar al Servidor</h2>
-            <p>Ingresa la URL del Coordinador (Middleware) para unirte a la red distribuida.</p>
-            
-            <div class="input-group">
-                <label>URL del Coordinador</label>
-                <input type="text" id="middleware-url" placeholder="Ej: https://...ngrok-free.dev" value="http://localhost:3000">
+        <!-- CONNECTION MODAL OVERLAY -->
+        <div id="connect-modal-overlay">
+            <div id="connect-modal" class="glass">
+                <button id="btn-close-modal" style="position: absolute; top: 10px; right: 10px; width: auto; padding: 5px 10px; background: transparent; color: white; box-shadow: none; font-size: 1.2rem;">✖</button>
+                <h2>Conectar al Servidor</h2>
+                <p>Ingresa la URL del Coordinador (Middleware) para unirte a la red distribuida.</p>
+                
+                <div class="input-group">
+                    <label>URL del Coordinador</label>
+                    <input type="text" id="middleware-url" placeholder="Ej: https://...ngrok-free.dev" value="http://localhost:3000">
+                </div>
+                
+                <button id="btn-connect">Conectar 🚀</button>
+                <p id="connect-error" style="color: #ef4444; margin-top: 1rem; font-size: 0.9rem; display: none;"></p>
             </div>
-            
-            <button id="btn-connect">Conectar 🚀</button>
-            <p id="connect-error" style="color: #ef4444; margin-top: 1rem; font-size: 0.9rem; display: none;"></p>
         </div>
 
-        <!-- DASHBOARD (Hidden) -->
+        <!-- DASHBOARD -->
         <div id="dashboard-view">
             <!-- Sidebar -->
             <div class="sidebar glass card">
@@ -122,6 +126,7 @@
                 <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
                     <input type="text" id="direct-url-input" placeholder="Ej: https://...ngrok.dev" style="font-size: 0.85rem; padding: 0.6rem;">
                     <button id="btn-chat-url" style="padding: 0.6rem; font-size: 0.9rem;">Abrir Chat Directo</button>
+                    <button id="btn-open-connect" style="margin-top: 1rem; padding: 0.6rem; font-size: 0.9rem; background: var(--primary);">🔌 Conectar al Servidor</button>
                 </div>
             </div>
             
@@ -175,6 +180,18 @@
             return rawName;
         }
 
+        const connectModalOverlay = document.getElementById("connect-modal-overlay");
+        const btnOpenConnect = document.getElementById("btn-open-connect");
+        const btnCloseModal = document.getElementById("btn-close-modal");
+
+        btnOpenConnect.addEventListener("click", () => {
+            connectModalOverlay.style.display = "flex";
+        });
+        
+        btnCloseModal.addEventListener("click", () => {
+            connectModalOverlay.style.display = "none";
+        });
+
         // Fetch Initial Status
         async function checkStatus() {
             try {
@@ -195,6 +212,12 @@
         }
         
         setInterval(checkStatus, 3000);
+        
+        // Fetch contacts and messages constantly
+        fetchContacts();
+        fetchMessages();
+        setInterval(fetchMessages, 2000);
+        setInterval(fetchContacts, 4000);
         
         // Connect Action
         btnConnect.addEventListener("click", async () => {
@@ -228,16 +251,10 @@
         });
         
         function showDashboard() {
-            connectModal.style.display = "none";
-            dashboardView.style.display = "flex";
+            connectModalOverlay.style.display = "none";
             statusIndicator.className = "status-badge status-connected";
             statusIndicator.innerHTML = '<span class="dot">●</span> Conectado';
             isConnected = true;
-            
-            fetchContacts();
-            fetchMessages();
-            setInterval(fetchMessages, 2000);
-            setInterval(fetchContacts, 4000);
         }
 
         async function fetchContacts() {

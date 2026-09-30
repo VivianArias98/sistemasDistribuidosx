@@ -222,8 +222,8 @@ const htmlUI = `
                 document.getElementById('btn-worker').classList.add('active');
                 document.getElementById('btn-worker').querySelector('input').checked = true;
                 document.getElementById('url-label').textContent = 'URL del Coordinador al que te conectarás';
-                document.getElementById('url-help').textContent = 'Obligatorio para los trabajadores.';
-                document.getElementById('urls').required = true;
+                document.getElementById('url-help').textContent = 'Opcional. Puedes configurarlo después desde el panel.';
+                document.getElementById('urls').required = false;
             }
         }
 
