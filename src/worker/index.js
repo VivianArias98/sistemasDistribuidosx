@@ -537,29 +537,21 @@ app.get("/task/capabilities", (req, res) => {
     // Obtener las capacidades reales del tasks.service
     const allCapabilities = tasks.getSupportedCapabilities();
 
-    const capabilitiesDetail = allCapabilities.map(type => {
+    const schemas = {};
+    allCapabilities.forEach(type => {
         const desc = CAPABILITY_DESCRIPTIONS[type] || {};
-        return {
-            type,
+        schemas[type] = {
             description: desc.description || type,
-            payload: desc.payload || null,
-            example: desc.example || null,
-            result: desc.result || null
+            payload: desc.payload || {},
+            expectedResult: desc.result || {}
         };
     });
 
-    // Respuesta compatible con parcial-ssd-main Y con nuestro formato
+    // Respuesta EXACTA requerida por el formato del proyecto original
     res.json({
-        type: "capabilities",
-        data: {
-            id: WORKER_NAME,
-            capabilities: capabilitiesDetail
-        },
-        // Mantener retrocompatibilidad con nuestro coordinador
+        worker: WORKER_NAME,
         capabilities: allCapabilities,
-        schemas: {
-            "generate_password": { "length": 12 }
-        }
+        schemas: schemas
     });
 });
 
