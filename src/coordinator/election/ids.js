@@ -11,14 +11,6 @@
  * @returns {number} > 0 si a > b, < 0 si a < b, 0 si iguales
  */
 function compareIds(a, b) {
-    // Extraer número de prioridad si existe en el formato coordinator-nombre-prioridad
-    const numA = parseInt(String(a).replace(/\D/g, ""), 10);
-    const numB = parseInt(String(b).replace(/\D/g, ""), 10);
-    
-    if (!isNaN(numA) && !isNaN(numB)) {
-        if (numA !== numB) return numA - numB;
-    }
-    
     return String(a).localeCompare(String(b));
 }
 
