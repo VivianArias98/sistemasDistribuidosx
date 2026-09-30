@@ -109,11 +109,23 @@ function start(parentUrl, workerName, onLost) {
 }
 
 /**
- * Detiene el servicio de pulsos.
+ * Detiene el servicio de pulsos sin disparar onLost (ej. para shutdown).
  */
 function stop() {
     clearInterval(_handle);
     _handle = null;
+}
+
+/**
+ * Fuerza la interrupción del pulso y dispara el callback onLost
+ * para despertar el mainLoop.
+ */
+function forceReconnect() {
+    if (_handle) {
+        clearInterval(_handle);
+        _handle = null;
+    }
+    if (_onLost) _onLost();
 }
 
 /**
@@ -124,4 +136,4 @@ function setParent(parentUrl) {
     _failCount = 0;
 }
 
-module.exports = { start, stop, setParent };
+module.exports = { start, stop, forceReconnect, setParent };

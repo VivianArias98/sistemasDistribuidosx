@@ -220,15 +220,11 @@ app.get("/parent", (_req, res) => res.json({ parentUrl }));
 app.post("/parent", async (req, res) => {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: "Se requiere 'url'" });
-    pulse.stop();
-    status = "buscando";
+    
+    COORDINATORS = [url, ...COORDINATORS.filter(u => u !== url)];
+    pulse.forceReconnect();
+    
     res.json({ ok: true, message: "Migrando al nuevo coordinador...", newParent: url });
-    try {
-        await registerWithCoordinator(url);
-        pulse.start(url, WORKER_NAME, () => { status = "buscando"; mainLoop(); });
-    } catch (err) {
-        mainLoop();
-    }
 });
 
 app.post("/send-message", async (req, res) => {
@@ -346,9 +342,13 @@ app.post("/api/connect", async (req, res) => {
     const { middlewareUrl } = req.body;
     if (!middlewareUrl) return res.status(400).json({ error: "Falta middlewareUrl" });
     try {
-        await registerWithCoordinator(middlewareUrl);
-        pulse.start(middlewareUrl, WORKER_NAME, () => { status = "buscando"; mainLoop(); });
-        res.json({ success: true, middlewareUrl });
+        // Asegurarse de que la URL solicitada sea la primera en intentar
+        COORDINATORS = [middlewareUrl, ...COORDINATORS.filter(u => u !== middlewareUrl)];
+        
+        // Despertar al mainLoop existente forzando una reconexión
+        pulse.forceReconnect();
+        
+        res.json({ success: true, middlewareUrl, message: "Conectando en segundo plano..." });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -686,8 +686,12 @@ app.post("/task/assign", async (req, res) => {
 
 app.post("/stop-pulse", (_req, res) => { pulse.stop(); res.json({ ok: true, pulsing: false }); });
 app.post("/start-pulse", (_req, res) => {
-    if (parentUrl && status === "registrado") {
-        pulse.start(parentUrl, WORKER_NAME, () => { status = "buscando"; mainLoop(); });
+    if (parentUrl && status === "apagado") {
+        status = "buscando";
+        mainLoop();
+        res.json({ ok: true, pulsing: true });
+    } else if (parentUrl) {
+        pulse.forceReconnect();
         res.json({ ok: true, pulsing: true });
     } else {
         res.status(409).json({ error: "No hay coordinador activo" });
