@@ -6,6 +6,9 @@ const axios = require("axios");
  * 9.5 vector_distance: Distancia entre dos vectores de 2 dimensiones.
  */
 function vectorDistance(payload) {
+    if (!payload || !payload.a || !payload.b) {
+        throw new Error("❌ JSON inválido. Para usar vector_distance debes enviar esta estructura: {\"a\": [x, y], \"b\": [x, y]}");
+    }
     const { a, b } = payload;
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== 2 || b.length !== 2) {
         throw new Error("Se requiere 'a' y 'b' como arreglos de 2 dimensiones");
@@ -18,8 +21,10 @@ function vectorDistance(payload) {
  * 9.6 http_latency: Latencia de una URL en milisegundos.
  */
 async function httpLatency(payload) {
+    if (!payload || !payload.url || typeof payload.url !== "string") {
+        throw new Error("❌ JSON inválido. Para usar http_latency debes enviar esta estructura: {\"url\": \"https://ejemplo.com\"}");
+    }
     const { url } = payload;
-    if (!url) throw new Error("Se requiere 'url'");
     const start = Date.now();
     try {
         await axios.head(url, { timeout: 5000 });
