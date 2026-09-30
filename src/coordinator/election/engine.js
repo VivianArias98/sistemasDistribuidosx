@@ -464,6 +464,22 @@ async function _tick() {
                         }, { timeout: 2000 }).catch(() => {});
                     }
                 }
+            } else if (data.role === "follower" && engine.role === "leader") {
+                // ALIGN FOLLOWERS: Si soy líder y un follower cree que el líder es otro, le reafirmo mi liderazgo
+                const peerLeader = data.leader || data.currentLeader;
+                if (peerLeader && peerLeader !== engine.selfId) {
+                    logger.election(engine.selfId, `Gossip: El follower ${resolvedId} cree que el líder es ${peerLeader}. Reafirmando mi liderazgo.`);
+                    transport.post(`${url}/election/message`, {
+                        type: "leader-announce",
+                        data: {
+                            leaderId: engine.selfId,
+                            leaderUrl: engine.selfUrl,
+                            priority: parseInt(engine.selfId.replace(/\D/g, "") || "0")
+                        },
+                        from: { id: engine.selfId, url: engine.selfUrl },
+                        payload: { term, priority: parseInt(engine.selfId.replace(/\D/g, "") || "0") }
+                    }, { timeout: 2000 }).catch(() => {});
+                }
             }
 
             if (!peer.alive) {

@@ -120,6 +120,21 @@ router.post("/election/ping", (req, res) => {
                 }, { timeout: 2000 }).catch(() => {});
             }, 100);
         }
+    } else if (body.role === "follower" && snap.role === "leader" && id) {
+        // ALIGN FOLLOWERS: Si nos hace PING un follower que cree que el líder es otro, lo alineamos.
+        const peerLeader = body.leader || body.currentLeader || (fromObj && fromObj.currentLeader);
+        if (peerLeader && peerLeader !== snap.id) {
+            logger.warn("PING", `El follower ${id} cree que el líder es ${peerLeader}. Reafirmando mi liderazgo asincronamente.`);
+            setTimeout(() => {
+                const transport = require("../election/transport");
+                transport.post(`${url}/election/message`, {
+                    type: "leader-announce",
+                    data: { leaderId: snap.id, leaderUrl: snap.url, priority: parseInt(snap.id.replace(/\\D/g, "") || "0") },
+                    from: { id: snap.id, url: snap.url },
+                    payload: { term: snap.term, priority: parseInt(snap.id.replace(/\\D/g, "") || "0") }
+                }, { timeout: 2000 }).catch(() => {});
+            }, 100);
+        }
     }
 
     res.json({
