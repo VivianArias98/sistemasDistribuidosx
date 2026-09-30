@@ -804,8 +804,8 @@ router.post("/api/assign-task", ensureLeader, async (req, res) => {
 
     const taskId = `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     
-    // Guardar payload para mostrarlo en el resultado final
-    pendingTasks.set(taskId, { type, payload });
+    // Guardar payload y nombre del worker para mostrarlo en el resultado final
+    pendingTasks.set(taskId, { type, payload, workerId: selectedWorker.name });
     // Limpiar tareas viejas (más de 5 minutos)
     const FIVE_MIN = 5 * 60 * 1000;
     for (const [id, info] of pendingTasks) {
@@ -850,8 +850,8 @@ router.post("/task/receive", (req, res) => {
     pendingTasks.delete(taskId);
     
     // Construir mensaje enriquecido con los datos de la operación y el resultado
-    // Compatibilidad: leer workerId del body.data (parcial-ssd-main) o del query param (nuestro formato)
-    const sender = body.data.workerId || req.query.workerId || "Sistema";
+    // Compatibilidad: leer workerId del body.data, del query param, o de nuestra memoria interna
+    const sender = body.data.workerId || req.query.workerId || (taskInfo ? taskInfo.workerId : null) || "Sistema";
     const receiver = engine.selfId || "Coordinador";
     
     let msgText;

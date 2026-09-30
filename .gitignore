@@ -1,6 +1,8 @@
 node_modules/
 .DS_Store
 cosas debe tenr/
+.obsidian/
+.vscode/
 
 
 # Antigravity/AI Agent skills

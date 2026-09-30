@@ -3,68 +3,6 @@ const axios = require("axios");
 // ─── Implementaciones de capacidades del examen (Sección 9) ──────────────────
 
 /**
- * 9.1 math_compute: Calculadora básica — operación y dos operandos.
- */
-function mathCompute(payload) {
-    const { operation, a, b } = payload;
-    if (typeof a !== "number" || typeof b !== "number") {
-        throw new Error("Operandos 'a' y 'b' deben ser números");
-    }
-    switch (operation) {
-        case "add": return { result: a + b };
-        case "sub": return { result: a - b };
-        case "mul": return { result: a * b };
-        case "div":
-            if (b === 0) throw new Error("División por cero");
-            return { result: a / b };
-        default:
-            throw new Error(`Operación no soportada: ${operation}`);
-    }
-}
-
-/**
- * 9.2 http_fetch: Hace fetch a la URL y retorna el estado y cuerpo.
- */
-async function httpFetch(payload) {
-    const { url } = payload;
-    if (!url) throw new Error("Se requiere la propiedad 'url'");
-    try {
-        const resp = await axios.get(url, { timeout: 5000 });
-        return { status: resp.status, body: resp.data };
-    } catch (err) {
-        if (err.response) return { status: err.response.status, body: err.response.data };
-        throw err;
-    }
-}
-
-/**
- * 9.3 search_text: Busca en texto cuántas veces aparece el query.
- */
-function searchText(payload) {
-    const { text, query } = payload;
-    if (typeof text !== "string" || typeof query !== "string") {
-        throw new Error("Se requiere 'text' y 'query' como strings");
-    }
-    const count = (text.match(new RegExp(query, "g")) || []).length;
-    return { count };
-}
-
-/**
- * 9.4 stats_compute: Promedio, mínimo y máximo de una lista de números.
- */
-function statsCompute(payload) {
-    const { numbers } = payload;
-    if (!Array.isArray(numbers) || numbers.length === 0) {
-        throw new Error("Se requiere 'numbers' como arreglo con al menos un elemento");
-    }
-    const sum  = numbers.reduce((a, b) => a + b, 0);
-    const mean = sum / numbers.length;
-    const min  = Math.min(...numbers);
-    const max  = Math.max(...numbers);
-    return { mean, min, max };
-}
-
-/**
  * 9.5 vector_distance: Distancia entre dos vectores de 2 dimensiones.
  */
 function vectorDistance(payload) {
@@ -124,29 +62,10 @@ function registerHandler(name, handler) {
 
 // ─── Mapa base de capacidades conocidas ──────────────────────────────────────
 
-/**
- * generate_password: Genera una contraseña aleatoria de la longitud especificada.
- */
-function generatePassword(payload) {
-    const length = parseInt(payload?.length || 12, 10);
-    if (length < 1 || length > 256) throw new Error("La longitud debe estar entre 1 y 256");
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-    let password = "";
-    for (let i = 0; i < length; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return { password };
-}
-
 const builtinHandlers = {
-    "math_compute":      mathCompute,
-    "http_fetch":        httpFetch,
-    "search_text":       searchText,
-    "stats_compute":     statsCompute,
     "vector_distance":   vectorDistance,
     "http_latency":      httpLatency,
     "count_vowels":      countVowels,
-    "generate_password": generatePassword,
 };
 
 /**
