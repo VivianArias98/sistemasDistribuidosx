@@ -46,6 +46,37 @@ function countVowels(payload) {
     return { vowels: count };
 }
 
+/**
+ * text_transform: Transforma un texto (ej. a mayúsculas o minúsculas).
+ */
+function textTransform(payload) {
+    if (!payload || !payload.text || typeof payload.text !== "string") {
+        throw new Error("❌ JSON inválido. Para usar text_transform debes enviar esta estructura: {\"text\": \"texto\", \"operation\": \"uppercase|lowercase\"}");
+    }
+    
+    let resultText = payload.text;
+    if (payload.operation === "uppercase") {
+        resultText = resultText.toUpperCase();
+    } else if (payload.operation === "lowercase") {
+        resultText = resultText.toLowerCase();
+    }
+    
+    return { text: resultText };
+}
+
+/**
+ * generate_password: Crea una contraseña.
+ */
+function generatePassword(payload) {
+    const length = payload?.length || 12;
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()";
+    let password = "";
+    for (let i = 0; i < length; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return { password };
+}
+
 // ─── Registro dinámico de handlers ───────────────────────────────────────────
 //
 // Permite que capacidades DESCONOCIDAS se puedan registrar en tiempo de ejecución.

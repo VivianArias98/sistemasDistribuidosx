@@ -40,7 +40,7 @@ const inbox = [];
 const DEFAULT_CAPABILITIES = [
     "vector_distance",   // 9.5 - Distancia entre vectores
     "http_latency",      // 9.6 - Latencia HTTP
-    "generate_password"  // Capacidad completamente nueva
+    "count_vowels"       // Tarea asignada
 ];
 
 /**
@@ -525,6 +525,12 @@ app.get("/task/capabilities", (req, res) => {
             payload: { text: "string" },
             example: { text: "hola mundo" },
             result: { vowels: "number" }
+        },
+        text_transform: {
+            description: "Transforma un texto a mayúsculas o minúsculas",
+            payload: { text: "string", operation: "uppercase|lowercase" },
+            example: { text: "hola", operation: "uppercase" },
+            result: { text: "string" }
         }
     };
 
