@@ -82,6 +82,15 @@ function start(parentUrl, workerName, onLost) {
                 if (_onLost) _onLost(data.leaderUrl);
                 return;
             }
+            // Compatibilidad con SistemasDistribuidos-main (Retorna 409 con leader)
+            if (err.response && err.response.status === 409 && err.response.data && err.response.data.leader) {
+                const newLeader = err.response.data.leader;
+                logger.warn(`🔀 [REDIRECCIÓN] El líder cambió a: ${newLeader}. Reconectando...`);
+                clearInterval(_handle);
+                _handle = null;
+                if (_onLost) _onLost(newLeader);
+                return;
+            }
 
             _failCount++;
             logger.warn(`Pulso fallido (${_failCount}/${MAX_FAILURES}): ${err.message}`);

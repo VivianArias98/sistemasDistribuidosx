@@ -119,6 +119,15 @@ async function huntForLeader() {
                     }
                     break; // Romper para reiniciar el while loop
                 }
+                // Compatibilidad con SistemasDistribuidos-main (Retorna 409 con leader)
+                if (err.response && err.response.status === 409 && err.response.data && err.response.data.leader) {
+                    const leaderUrl = err.response.data.leader;
+                    logger.hunt(`🔀 Redirigido al líder por 409: ${leaderUrl}`);
+                    if (leaderUrl) {
+                        COORDINATORS = [leaderUrl, ...COORDINATORS.filter(u => u !== leaderUrl)];
+                    }
+                    break;
+                }
                 logger.hunt(`${url} no responde o error (${err.message}), continuando...`);
             }
         }
